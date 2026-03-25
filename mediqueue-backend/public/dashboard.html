@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MediQueue Admin</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: sans-serif;
+      background: #f0f4f8;
+      color: #1a1a2e;
+    }
+
+    header {
+      background: #1a73e8;
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 { font-size: 20px; }
+
+    #logout-btn {
+      background: white;
+      color: #1a73e8;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .container { max-width: 900px; margin: 32px auto; padding: 0 16px; }
+
+    /* Login */
+    #login-section {
+      background: white;
+      padding: 32px;
+      border-radius: 12px;
+      max-width: 400px;
+      margin: 80px auto;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    #login-section h2 { margin-bottom: 24px; color: #1a73e8; }
+
+    input, select {
+      width: 100%;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover { background: #1558b0; }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+
+    .error { color: red; font-size: 14px; margin-bottom: 12px; }
+
+    /* Dashboard */
+    #dashboard-section { display: none; }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    .card h2 { margin-bottom: 16px; font-size: 18px; color: #333; }
+
+    #current-token-box {
+      text-align: center;
+      padding: 32px;
+      background: #e8f0fe;
+      border-radius: 12px;
+      margin-bottom: 24px;
+    }
+
+    #current-token-box .label { font-size: 14px; color: #555; margin-bottom: 8px; }
+
+    #current-token-number {
+      font-size: 64px;
+      font-weight: bold;
+      color: #1a73e8;
+    }
+
+    #current-patient-name {
+      font-size: 18px;
+      color: #333;
+      margin-top: 8px;
+    }
+
+    #next-btn {
+      width: auto;
+      padding: 12px 32px;
+      margin: 0 auto;
+      display: block;
+      font-size: 16px;
+      background: #34a853;
+    }
+
+    #next-btn:hover { background: #2d8f47; }
+
+    #waiting-count {
+      text-align: center;
+      font-size: 15px;
+      color: #555;
+      margin-bottom: 16px;
+    }
+
+    /* Queue table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15px;
+    }
+
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      background: #f5f5f5;
+      color: #555;
+      font-weight: 600;
+      border-bottom: 2px solid #eee;
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    .badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .badge.emergency { background: #fce8e6; color: #c5221f; }
+    .badge.normal { background: #e6f4ea; color: #1e8e3e; }
+
+    #empty-msg {
+      text-align: center;
+      color: #aaa;
+      padding: 32px;
+      display: none;
+    }
+
+    .doctor-selector { display: flex; gap: 12px; align-items: center; }
+    .doctor-selector select { margin-bottom: 0; }
+    .doctor-selector button { width: auto; padding: 10px 20px; }
+  </style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="login-section">
+  <h2>MediQueue Admin</h2>
+  <p class="error" id="login-error"></p>
+  <input type="email" id="email" placeholder="Admin email" />
+  <input type="password" id="password" placeholder="Password" />
+  <button onclick="login()">Login</button>
+</div>
+
+<!-- Dashboard -->
+<div id="dashboard-section">
+  <header>
+    <h1>MediQueue Admin Dashboard</h1>
+    <button id="logout-btn" onclick="logout()">Logout</button>
+  </header>
+
+  <div class="container">
+
+    <!-- Doctor selector -->
+    <div class="card">
+      <h2>Select Doctor</h2>
+      <div class="doctor-selector">
+        <select id="doctor-select">
+          <option value="">-- Select a doctor --</option>
+        </select>
+        <button onclick="loadQueue()" style="width:auto;padding:10px 20px;">Load Queue</button>
+      </div>
+    </div>
+
+    <!-- Current token -->
+    <div id="current-token-box">
+      <div class="label">Now serving</div>
+      <div id="current-token-number">--</div>
+      <div id="current-patient-name">No patient yet</div>
+    </div>
+
+    <!-- Next button -->
+    <button id="next-btn" onclick="nextPatient()">Next Patient ➜</button>
+
+    <!-- Queue list -->
+    <div class="card" style="margin-top:24px;">
+      <h2>Waiting Queue</h2>
+      <p id="waiting-count">0 patients waiting</p>
+      <div id="empty-msg">No patients in queue</div>
+      <table id="queue-table">
+        <thead>
+          <tr>
+            <th>Position</th>
+            <th>Token</th>
+            <th>Patient</th>
+            <th>Type</th>
+            <th>Est. Wait</th>
+          </tr>
+        </thead>
+        <tbody id="queue-body"></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const BASE_URL = 'http://localhost:5000';
+  let token = null;
+  let currentDoctorId = null;
+  let socket = null;
+
+  // ─── Login ───────────────────────────────────────────
+  async function login() {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        document.getElementById('login-error').textContent = data.message;
+        return;
+      }
+
+      if (data.user.role !== 'admin') {
+        document.getElementById('login-error').textContent = 'Access denied. Admins only.';
+        return;
+      }
+
+      token = data.token;
+      document.getElementById('login-section').style.display = 'none';
+      document.getElementById('dashboard-section').style.display = 'block';
+
+      initSocket();
+      loadDoctors();
+
+    } catch (err) {
+      document.getElementById('login-error').textContent = 'Server error. Is backend running?';
+    }
+  }
+
+  // ─── Logout ──────────────────────────────────────────
+  function logout() {
+    token = null;
+    currentDoctorId = null;
+    if (socket) socket.disconnect();
+    document.getElementById('login-section').style.display = 'block';
+    document.getElementById('dashboard-section').style.display = 'none';
+  }
+
+  // ─── Socket.io ───────────────────────────────────────
+  function initSocket() {
+    socket = io(BASE_URL);
+
+    socket.on('connect', () => {
+      console.log('Socket connected:', socket.id);
+    });
+  }
+
+  function subscribeToQueue(doctorId) {
+    // Leave old room if any
+    if (currentDoctorId) {
+      socket.emit('leaveQueue', currentDoctorId);
+      socket.off(`queue:${currentDoctorId}`);
+    }
+
+    // Join new room
+    socket.emit('joinQueue', doctorId);
+
+    // Listen for updates
+    socket.on(`queue:${doctorId}`, (data) => {
+      console.log('Queue update:', data);
+
+      if (data.type === 'QUEUE_EMPTY') {
+        updateCurrentToken(null, 'Queue is empty');
+        renderQueue([]);
+        return;
+      }
+
+      if (data.type === 'NEXT_PATIENT') {
+        updateCurrentToken(data.currentToken, data.currentPatient);
+        renderQueue(data.queue);
+        updateWaitingCount(data.waitingCount);
+      }
+
+      if (data.type === 'NEW_APPOINTMENT') {
+        // Reload queue to show new patient
+        loadQueue();
+      }
+
+      if (data.type === 'APPOINTMENT_CANCELLED') {
+        loadQueue();
+      }
+    });
+  }
+
+  // ─── Load doctors ─────────────────────────────────────
+  async function loadDoctors() {
+    try {
+      const res = await fetch(`${BASE_URL}/api/doctors`);
+      const doctors = await res.json();
+
+      const select = document.getElementById('doctor-select');
+      select.innerHTML = '<option value="">-- Select a doctor --</option>';
+
+      doctors.forEach(doc => {
+        const option = document.createElement('option');
+        option.value = doc._id;
+        option.textContent = `${doc.name} — ${doc.department}`;
+        select.appendChild(option);
+      });
+    } catch (err) {
+      console.error('Failed to load doctors', err);
+    }
+  }
+
+  // ─── Load queue ───────────────────────────────────────
+  async function loadQueue() {
+    const doctorId = document.getElementById('doctor-select').value;
+    if (!doctorId) return alert('Please select a doctor first');
+
+    currentDoctorId = doctorId;
+    subscribeToQueue(doctorId);
+
+    try {
+      const res = await fetch(`${BASE_URL}/api/queue/${doctorId}`);
+      const data = await res.json();
+
+      updateCurrentToken(data.currentToken, data.currentPatient);
+      renderQueue(data.queue);
+      updateWaitingCount(data.waitingCount);
+
+    } catch (err) {
+      console.error('Failed to load queue', err);
+    }
+  }
+
+  // ─── Next patient ─────────────────────────────────────
+  async function nextPatient() {
+    if (!currentDoctorId) return alert('Please select a doctor first');
+
+    const btn = document.getElementById('next-btn');
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+
+    try {
+      await fetch(`${BASE_URL}/api/queue/${currentDoctorId}/next`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.error('Failed to move queue', err);
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Next Patient ➜';
+  }
+
+  // ─── UI helpers ───────────────────────────────────────
+  function updateCurrentToken(tokenNum, patientName) {
+    document.getElementById('current-token-number').textContent = tokenNum ?? '--';
+    document.getElementById('current-patient-name').textContent = patientName ?? 'No patient yet';
+  }
+
+  function updateWaitingCount(count) {
+    document.getElementById('waiting-count').textContent = `${count} patient${count !== 1 ? 's' : ''} waiting`;
+  }
+
+  function renderQueue(queue) {
+    const tbody = document.getElementById('queue-body');
+    const emptyMsg = document.getElementById('empty-msg');
+    const table = document.getElementById('queue-table');
+
+    tbody.innerHTML = '';
+
+    if (!queue || queue.length === 0) {
+      table.style.display = 'none';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+
+    table.style.display = 'table';
+    emptyMsg.style.display = 'none';
+
+    queue.forEach(item => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${item.position}</td>
+        <td><strong>#${item.tokenNumber}</strong></td>
+        <td>${item.patientName}</td>
+        <td><span class="badge ${item.type}">${item.type}</span></td>
+        <td>${item.estimatedWaitTime} min</td>
+      `;
+      tbody.appendChild(row);
+    });
+  }
+</script>
+</body>
+</html>

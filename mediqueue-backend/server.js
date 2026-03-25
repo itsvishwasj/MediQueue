@@ -17,6 +17,8 @@ connectDB();
 // Middleware
 app.use(cors());
 app.use(express.json());
+// Serve admin dashboard
+app.use(express.static('public'));
 
 // Routes (we'll fill these in coming steps)
 app.use('/api/auth',         require('./src/routes/auth'));
