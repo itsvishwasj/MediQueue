@@ -148,4 +148,78 @@ router.post('/:appointmentId/cancel', authMiddleware, async (req, res) => {
   }
 });
 
+// Patient scans QR at cabin door — auto check in
+router.post('/checkin/:appointmentId', async (req, res) => {
+  try {
+    const appointment = await Appointment.findById(req.params.appointmentId)
+      .populate('patient', 'name phone')
+      .populate('doctor', 'name avgConsultationTime');
+
+    if (!appointment) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+
+    if (appointment.status === 'completed') {
+      return res.status(400).json({ message: 'Appointment already completed' });
+    }
+
+    if (appointment.status === 'cancelled') {
+      return res.status(400).json({ message: 'Appointment was cancelled' });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const doctorId = appointment.doctor._id.toString();
+
+    // Mark any currently serving appointment as completed
+    await Appointment.findOneAndUpdate(
+      { doctor: doctorId, date: today, status: 'serving' },
+      { status: 'completed' }
+    );
+
+    // Mark this appointment as serving
+    appointment.status = 'serving';
+    await appointment.save();
+
+    // Get updated waiting list
+    const waiting = await Appointment.find({
+      doctor: doctorId,
+      date: today,
+      status: 'waiting'
+    })
+      .populate('patient', 'name phone')
+      .sort([['type', -1], ['tokenNumber', 1]]);
+
+    const queue = waiting.map((apt, index) => ({
+      _id: apt._id,
+      tokenNumber: apt.tokenNumber,
+      patientName: apt.patient.name,
+      type: apt.type,
+      position: index + 1,
+      estimatedWaitTime: index * appointment.doctor.avgConsultationTime
+    }));
+
+    const queueUpdate = {
+      type: 'NEXT_PATIENT',
+      currentToken: appointment.tokenNumber,
+      currentPatient: appointment.patient.name,
+      waitingCount: waiting.length,
+      queue
+    };
+
+    // Broadcast to all clients watching this doctor's queue
+    const io = req.app.get('io');
+    io.to(`queue:${doctorId}`).emit(`queue:${doctorId}`, queueUpdate);
+
+    res.json({
+      message: 'Checked in successfully',
+      tokenNumber: appointment.tokenNumber,
+      patientName: appointment.patient.name,
+      ...queueUpdate
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;

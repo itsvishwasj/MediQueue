@@ -201,6 +201,19 @@
         </select>
         <button onclick="loadQueue()" style="width:auto;padding:10px 20px;">Load Queue</button>
       </div>
+      <!-- QR Code display -->
+<div id="qr-section" style="display:none; margin-top:20px; text-align:center;">
+  <h3 style="margin-bottom:12px; color:#333;">Hospital Booking QR</h3>
+  <p style="font-size:13px; color:#666; margin-bottom:12px;">
+    Print and place this outside the doctor's cabin
+  </p>
+  <img id="qr-image" src="" style="width:200px; height:200px; border-radius:8px;" />
+  <p id="qr-doctor-name" style="margin-top:8px; font-weight:bold; color:#1a73e8;"></p>
+  <p id="qr-department" style="font-size:13px; color:#666;"></p>
+  <button onclick="printQR()" style="width:auto; padding:8px 20px; margin-top:12px; background:#666;">
+    Print QR
+  </button>
+</div>
     </div>
 
     <!-- Current token -->
@@ -354,24 +367,24 @@
 
   // ─── Load queue ───────────────────────────────────────
   async function loadQueue() {
-    const doctorId = document.getElementById('doctor-select').value;
-    if (!doctorId) return alert('Please select a doctor first');
+  const doctorId = document.getElementById('doctor-select').value;
+  if (!doctorId) return alert('Please select a doctor first');
 
-    currentDoctorId = doctorId;
-    subscribeToQueue(doctorId);
+  currentDoctorId = doctorId;
+  subscribeToQueue(doctorId);
+  loadDoctorQR(doctorId); // add this line
 
-    try {
-      const res = await fetch(`${BASE_URL}/api/queue/${doctorId}`);
-      const data = await res.json();
-
-      updateCurrentToken(data.currentToken, data.currentPatient);
-      renderQueue(data.queue);
-      updateWaitingCount(data.waitingCount);
-
-    } catch (err) {
-      console.error('Failed to load queue', err);
-    }
+  try {
+    const res = await fetch(`${BASE_URL}/api/queue/${doctorId}`);
+    const data = await res.json();
+    updateCurrentToken(data.currentToken, data.currentPatient);
+    renderQueue(data.queue);
+    updateWaitingCount(data.waitingCount);
+  } catch (err) {
+    console.error('Failed to load queue', err);
   }
+}
+
 
   // ─── Next patient ─────────────────────────────────────
   async function nextPatient() {
@@ -432,6 +445,38 @@
       tbody.appendChild(row);
     });
   }
+
+  // Load and show QR code for selected doctor
+async function loadDoctorQR(doctorId) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/hospitals/qr/${doctorId}`);
+    const data = await res.json();
+
+    document.getElementById('qr-image').src = data.qrImage;
+    document.getElementById('qr-doctor-name').textContent = data.doctorName;
+    document.getElementById('qr-department').textContent = data.department;
+    document.getElementById('qr-section').style.display = 'block';
+  } catch (err) {
+    console.error('Failed to load QR', err);
+  }
+}
+
+function printQR() {
+  const img = document.getElementById('qr-image').src;
+  const win = window.open('');
+  win.document.write(`
+    <html><body style="text-align:center; padding:40px;">
+      <h2>MediQueue Booking QR</h2>
+      <p>${document.getElementById('qr-doctor-name').textContent}</p>
+      <p>${document.getElementById('qr-department').textContent}</p>
+      <img src="${img}" style="width:300px;height:300px;" />
+      <p style="font-size:12px;color:#666;margin-top:16px;">
+        Scan to book your appointment
+      </p>
+    </body></html>
+  `);
+  win.print();
+}
 </script>
 </body>
 </html>

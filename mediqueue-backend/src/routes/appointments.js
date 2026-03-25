@@ -2,6 +2,7 @@ const router = require('express').Router();
 const Appointment = require('../models/Appointment');
 const Doctor = require('../models/Doctor');
 const authMiddleware = require('../middleware/auth');
+const QRCode = require('qrcode');
 
 // Book appointment
 router.post('/', authMiddleware, async (req, res) => {
@@ -57,6 +58,19 @@ router.post('/', authMiddleware, async (req, res) => {
       type: 'NEW_APPOINTMENT',
       appointment: populated
     });
+
+    // Generate token QR for patient
+const checkinUrl = `mediqueue://checkin?appointmentId=${appointment._id}`;
+const tokenQR = await QRCode.toDataURL(checkinUrl, {
+  width: 250,
+  margin: 2,
+  color: {
+    dark: '#1a1a2e',
+    light: '#ffffff'
+  }
+});
+
+res.status(201).json({ ...populated.toObject(), tokenQR, checkinUrl });
 
     res.status(201).json(populated);
   } catch (err) {
