@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MediQueue — Hospital Portal</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: sans-serif; background:#f0f4f8; color:#1a1a2e; }
+
+    header {
+      background:#1a73e8; color:white;
+      padding:16px 24px;
+      display:flex; justify-content:space-between; align-items:center;
+    }
+    header h1 { font-size:20px; }
+
+    .container { max-width:960px; margin:32px auto; padding:0 16px; }
+
+    .card {
+      background:white; border-radius:12px;
+      padding:24px; margin-bottom:24px;
+      box-shadow:0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    .card h2 { margin-bottom:16px; font-size:18px; color:#333; }
+
+    input, select, textarea {
+      width:100%; padding:10px 14px;
+      margin-bottom:12px;
+      border:1px solid #ddd; border-radius:8px; font-size:15px;
+    }
+
+    .btn {
+      padding:10px 20px; border:none;
+      border-radius:8px; cursor:pointer;
+      font-size:15px; font-weight:bold;
+    }
+
+    .btn-primary { background:#1a73e8; color:white; }
+    .btn-primary:hover { background:#1558b0; }
+    .btn-success { background:#34a853; color:white; }
+    .btn-danger  { background:#e53935; color:white; }
+
+    .error { color:red; font-size:14px; margin-bottom:12px; }
+    .success { color:green; font-size:14px; margin-bottom:12px; }
+
+    /* Auth tabs */
+    .tabs {
+      display:flex; gap:0;
+      margin-bottom:24px; border-radius:8px; overflow:hidden;
+      border:1px solid #ddd;
+    }
+    .tab {
+      flex:1; padding:12px; text-align:center;
+      cursor:pointer; background:white; font-weight:bold;
+      color:#666; border:none; font-size:15px;
+    }
+    .tab.active { background:#1a73e8; color:white; }
+
+    /* Grid */
+    .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+
+    /* Doctor list */
+    .doctor-item {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:12px 16px; border:1px solid #eee;
+      border-radius:8px; margin-bottom:8px;
+    }
+
+    /* QR */
+    #qr-modal {
+      display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,0.5);
+      justify-content:center; align-items:center; z-index:100;
+    }
+    #qr-modal.show { display:flex; }
+    .qr-box {
+      background:white; padding:32px; border-radius:16px;
+      text-align:center; max-width:320px; width:100%;
+    }
+    .qr-box img { width:220px; height:220px; margin:16px 0; }
+    .qr-box h3 { font-size:18px; margin-bottom:4px; }
+    .qr-box p  { color:#666; font-size:14px; margin-bottom:16px; }
+
+    /* Queue section */
+    .token-display {
+      text-align:center; padding:24px;
+      background:#e8f0fe; border-radius:12px; margin-bottom:16px;
+    }
+    .token-display .num { font-size:56px; font-weight:bold; color:#1a73e8; }
+
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    th { background:#f5f5f5; padding:10px 12px; text-align:left; }
+    td { padding:10px 12px; border-bottom:1px solid #f0f0f0; }
+    .badge {
+      padding:3px 8px; border-radius:12px;
+      font-size:11px; font-weight:bold;
+    }
+    .badge.emergency { background:#fce8e6; color:#c5221f; }
+    .badge.normal    { background:#e6f4ea; color:#1e8e3e; }
+
+    #logout-btn {
+      background:white; color:#1a73e8;
+      border:none; padding:8px 16px;
+      border-radius:6px; cursor:pointer; font-weight:bold;
+    }
+
+    .section { display:none; }
+    .section.active { display:block; }
+
+    nav {
+      display:flex; gap:8px; margin-bottom:24px; flex-wrap:wrap;
+    }
+    .nav-btn {
+      padding:8px 16px; border-radius:8px;
+      border:1px solid #ddd; background:white;
+      cursor:pointer; font-size:14px;
+    }
+    .nav-btn.active { background:#1a73e8; color:white; border-color:#1a73e8; }
+  </style>
+</head>
+<body>
+
+<!-- Auth section -->
+<div id="auth-section">
+  <div style="max-width:480px;margin:60px auto;padding:0 16px;">
+    <div style="text-align:center;margin-bottom:32px;">
+      <div style="font-size:48px;">🏥</div>
+      <h1 style="color:#1a73e8;margin-top:8px;">MediQueue</h1>
+      <p style="color:#666;">Hospital Portal</p>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('login')">Login</button>
+      <button class="tab" onclick="showTab('register')">Register Hospital</button>
+    </div>
+
+    <!-- Login form -->
+    <div id="login-form" class="card">
+      <h2>Hospital Login</h2>
+      <p class="error" id="login-error"></p>
+      <input type="email" id="login-email" placeholder="Hospital email"/>
+      <input type="password" id="login-password" placeholder="Password"/>
+      <button class="btn btn-primary" style="width:100%" onclick="hospitalLogin()">
+        Login
+      </button>
+    </div>
+
+    <!-- Register form -->
+    <div id="register-form" class="card" style="display:none;">
+      <h2>Register Your Hospital</h2>
+      <p class="error" id="register-error"></p>
+      <p class="success" id="register-success"></p>
+      <input type="text"  id="reg-name"     placeholder="Hospital name"/>
+      <input type="text"  id="reg-address"  placeholder="Hospital address"/>
+      <input type="text"  id="reg-depts"    placeholder="Departments (comma separated e.g. Cardiology, General)"/>
+      <input type="email" id="reg-email"    placeholder="Login email"/>
+      <input type="tel"   id="reg-phone"    placeholder="Phone number"/>
+      <input type="password" id="reg-password" placeholder="Create password"/>
+      <button class="btn btn-primary" style="width:100%" onclick="hospitalRegister()">
+        Register Hospital
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard section -->
+<div id="dashboard-section" style="display:none;">
+  <header>
+    <h1>🏥 <span id="hospital-name">Hospital</span> Dashboard</h1>
+    <button id="logout-btn" onclick="logout()">Logout</button>
+  </header>
+
+  <div class="container">
+    <nav>
+      <button class="nav-btn active" onclick="showSection('doctors-section')">Doctors</button>
+      <button class="nav-btn" onclick="showSection('queue-section')">Queue</button>
+    </nav>
+
+    <!-- Doctors section -->
+    <div id="doctors-section" class="section active">
+      <!-- Add doctor -->
+      <div class="card">
+        <h2>Add Doctor</h2>
+        <p class="error"   id="doctor-error"></p>
+        <p class="success" id="doctor-success"></p>
+        <div class="grid-2">
+          <input type="text" id="doctor-name" placeholder="Doctor name"/>
+          <input type="text" id="doctor-dept" placeholder="Department"/>
+        </div>
+        <input type="number" id="doctor-time"
+          placeholder="Avg consultation time (minutes)" value="10"/>
+        <button class="btn btn-primary" onclick="addDoctor()">Add Doctor</button>
+      </div>
+
+      <!-- Doctor list -->
+      <div class="card">
+        <h2>Your Doctors</h2>
+        <div id="doctors-list">
+          <p style="color:#aaa;text-align:center;padding:24px;">
+            No doctors added yet
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Queue section -->
+    <div id="queue-section" class="section">
+      <div class="card">
+        <h2>Select Doctor</h2>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <select id="queue-doctor-select" style="margin:0;">
+            <option value="">-- Select doctor --</option>
+          </select>
+          <button class="btn btn-primary" onclick="loadQueue()">Load Queue</button>
+        </div>
+      </div>
+
+      <div class="token-display">
+        <div style="font-size:13px;color:#555;margin-bottom:4px;">Now serving</div>
+        <div class="num" id="current-token">--</div>
+        <div id="current-patient" style="color:#555;margin-top:4px;"></div>
+      </div>
+
+      <div style="text-align:center;margin-bottom:16px;">
+        <button class="btn btn-success" onclick="nextPatient()"
+          id="next-btn" style="padding:12px 40px;font-size:16px;">
+          Next Patient ➜
+        </button>
+      </div>
+
+      <div class="card">
+        <h2>Waiting Queue
+          <span id="waiting-count"
+            style="font-size:14px;color:#666;font-weight:normal;margin-left:8px;">
+          </span>
+        </h2>
+        <div id="empty-msg" style="text-align:center;color:#aaa;padding:24px;">
+          Select a doctor to view queue
+        </div>
+        <table id="queue-table" style="display:none;">
+          <thead>
+            <tr>
+              <th>Position</th>
+              <th>Token</th>
+              <th>Patient</th>
+              <th>Type</th>
+              <th>Est. Wait</th>
+            </tr>
+          </thead>
+          <tbody id="queue-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- QR Modal -->
+<div id="qr-modal">
+  <div class="qr-box">
+    <h3 id="qr-doctor-name"></h3>
+    <p id="qr-department"></p>
+    <img id="qr-img" src="" alt="QR Code"/>
+    <p style="font-size:12px;color:#999;margin-bottom:16px;">
+      Print and place outside cabin
+    </p>
+    <div style="display:flex;gap:8px;justify-content:center;">
+      <button class="btn btn-primary" onclick="printQR()">Print</button>
+      <button class="btn" style="background:#eee;color:#333;"
+        onclick="closeQR()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const BASE = 'http://localhost:5000';
+  let token = null;
+  let hospitalId = null;
+  let hospitalName = '';
+  let currentDoctorId = null;
+  let socket = null;
+
+  // ── Tab switching ──────────────────────────────────
+  function showTab(tab) {
+    document.getElementById('login-form').style.display =
+      tab === 'login' ? 'block' : 'none';
+    document.getElementById('register-form').style.display =
+      tab === 'register' ? 'block' : 'none';
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      t.classList.toggle('active', (i === 0) === (tab === 'login'));
+    });
+  }
+
+  // ── Nav sections ───────────────────────────────────
+  function showSection(id) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    if (id === 'doctors-section') loadDoctors();
+  }
+
+  // ── Register ───────────────────────────────────────
+  async function hospitalRegister() {
+    const name     = document.getElementById('reg-name').value;
+    const address  = document.getElementById('reg-address').value;
+    const depts    = document.getElementById('reg-depts').value
+      .split(',').map(d => d.trim()).filter(Boolean);
+    const email    = document.getElementById('reg-email').value;
+    const phone    = document.getElementById('reg-phone').value;
+    const password = document.getElementById('reg-password').value;
+
+    document.getElementById('register-error').textContent = '';
+    document.getElementById('register-success').textContent = '';
+
+    try {
+      const res = await fetch(`${BASE}/api/auth/register/hospital`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hospitalName: name,
+          address, departments: depts,
+          email, phone, password
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById('register-error').textContent = data.message;
+        return;
+      }
+      document.getElementById('register-success').textContent =
+        'Hospital registered! You can now login.';
+      setTimeout(() => showTab('login'), 2000);
+    } catch (err) {
+      document.getElementById('register-error').textContent =
+        'Server error. Is backend running?';
+    }
+  }
+
+  // ── Login ──────────────────────────────────────────
+  async function hospitalLogin() {
+    const email    = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+
+    document.getElementById('login-error').textContent = '';
+
+    try {
+      const res = await fetch(`${BASE}/api/auth/login/hospital`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById('login-error').textContent = data.message;
+        return;
+      }
+      token      = data.token;
+      hospitalId = data.user.hospitalId;
+      hospitalName = data.user.name;
+      document.getElementById('hospital-name').textContent = hospitalName;
+      document.getElementById('auth-section').style.display      = 'none';
+      document.getElementById('dashboard-section').style.display = 'block';
+      initSocket();
+      loadDoctors();
+    } catch (err) {
+      document.getElementById('login-error').textContent =
+        'Server error. Is backend running?';
+    }
+  }
+
+  // ── Logout ─────────────────────────────────────────
+  function logout() {
+    token = null; hospitalId = null;
+    if (socket) socket.disconnect();
+    document.getElementById('auth-section').style.display      = 'block';
+    document.getElementById('dashboard-section').style.display = 'none';
+  }
+
+  // ── Socket ─────────────────────────────────────────
+  function initSocket() {
+    socket = io(BASE);
+    socket.on('connect', () => console.log('Socket connected'));
+  }
+
+  function subscribeToQueue(doctorId) {
+    if (currentDoctorId) {
+      socket.emit('leaveQueue', currentDoctorId);
+      socket.off(`queue:${currentDoctorId}`);
+    }
+    socket.emit('joinQueue', doctorId);
+    socket.on(`queue:${doctorId}`, data => {
+      if (data.type === 'NEXT_PATIENT') {
+        updateToken(data.currentToken, data.currentPatient);
+        renderQueue(data.queue);
+        updateCount(data.waitingCount);
+      }
+      if (data.type === 'QUEUE_EMPTY') {
+        updateToken(null, 'Queue is empty');
+        renderQueue([]);
+      }
+      if (data.type === 'NEW_APPOINTMENT') loadQueue();
+    });
+  }
+
+  // ── Doctors ────────────────────────────────────────
+  async function loadDoctors() {
+    if (!hospitalId) return;
+    try {
+      const res = await fetch(`${BASE}/api/doctors?hospitalId=${hospitalId}`);
+      const doctors = await res.json();
+      renderDoctors(doctors);
+      populateDoctorSelect(doctors);
+    } catch (err) {
+      console.error('Failed to load doctors', err);
+    }
+  }
+
+  function renderDoctors(doctors) {
+    const el = document.getElementById('doctors-list');
+    if (!doctors.length) {
+      el.innerHTML =
+        '<p style="color:#aaa;text-align:center;padding:24px;">No doctors added yet</p>';
+      return;
+    }
+    el.innerHTML = doctors.map(d => `
+      <div class="doctor-item">
+        <div>
+          <strong>${d.name}</strong>
+          <span style="color:#666;font-size:13px;margin-left:8px;">${d.department}</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span style="color:#999;font-size:13px;">~${d.avgConsultationTime} min</span>
+          <button class="btn btn-primary" style="padding:6px 12px;font-size:13px;"
+            onclick="showQR('${d._id}')">QR Code</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function populateDoctorSelect(doctors) {
+    const sel = document.getElementById('queue-doctor-select');
+    sel.innerHTML = '<option value="">-- Select doctor --</option>';
+    doctors.forEach(d => {
+      sel.innerHTML +=
+        `<option value="${d._id}">${d.name} — ${d.department}</option>`;
+    });
+  }
+
+  async function addDoctor() {
+    const name = document.getElementById('doctor-name').value.trim();
+    const dept = document.getElementById('doctor-dept').value.trim();
+    const time = document.getElementById('doctor-time').value;
+
+    document.getElementById('doctor-error').textContent   = '';
+    document.getElementById('doctor-success').textContent = '';
+
+    if (!name || !dept) {
+      document.getElementById('doctor-error').textContent =
+        'Name and department are required';
+      return;
+    }
+
+    try {
+      const res = await fetch(`${BASE}/api/doctors`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name, department: dept,
+          avgConsultationTime: parseInt(time) || 10
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById('doctor-error').textContent = data.message;
+        return;
+      }
+      document.getElementById('doctor-success').textContent =
+        `Dr. ${name} added successfully!`;
+      document.getElementById('doctor-name').value = '';
+      document.getElementById('doctor-dept').value = '';
+      loadDoctors();
+    } catch (err) {
+      document.getElementById('doctor-error').textContent = 'Failed to add doctor';
+    }
+  }
+
+  // ── QR Code ────────────────────────────────────────
+  async function showQR(doctorId) {
+    try {
+      const res  = await fetch(`${BASE}/api/hospitals/qr/${doctorId}`);
+      const data = await res.json();
+      document.getElementById('qr-img').src           = data.qrImage;
+      document.getElementById('qr-doctor-name').textContent = data.doctorName;
+      document.getElementById('qr-department').textContent  = data.department;
+      document.getElementById('qr-modal').classList.add('show');
+    } catch (err) {
+      alert('Failed to load QR code');
+    }
+  }
+
+  function closeQR() {
+    document.getElementById('qr-modal').classList.remove('show');
+  }
+
+  function printQR() {
+    const img  = document.getElementById('qr-img').src;
+    const name = document.getElementById('qr-doctor-name').textContent;
+    const dept = document.getElementById('qr-department').textContent;
+    const win  = window.open('');
+    win.document.write(`
+      <html><body style="text-align:center;padding:40px;">
+        <h2>MediQueue</h2>
+        <h3>${name}</h3>
+        <p>${dept} — ${hospitalName}</p>
+        <img src="${img}" style="width:280px;height:280px;margin:16px 0;"/>
+        <p style="font-size:13px;color:#666;">Scan to book your appointment</p>
+      </body></html>
+    `);
+    win.print();
+  }
+
+  // ── Queue ──────────────────────────────────────────
+  async function loadQueue() {
+    const doctorId = document.getElementById('queue-doctor-select').value;
+    if (!doctorId) return alert('Please select a doctor');
+    currentDoctorId = doctorId;
+    subscribeToQueue(doctorId);
+    try {
+      const res  = await fetch(`${BASE}/api/queue/${doctorId}`);
+      const data = await res.json();
+      updateToken(data.currentToken, data.currentPatient);
+      renderQueue(data.queue);
+      updateCount(data.waitingCount);
+    } catch (err) {
+      console.error('Failed to load queue', err);
+    }
+  }
+
+  async function nextPatient() {
+    if (!currentDoctorId) return alert('Select a doctor first');
+    const btn = document.getElementById('next-btn');
+    btn.disabled = true; btn.textContent = 'Loading...';
+    try {
+      await fetch(`${BASE}/api/queue/${currentDoctorId}/next`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.error(err);
+    }
+    btn.disabled = false; btn.textContent = 'Next Patient ➜';
+  }
+
+  function updateToken(num, name) {
+    document.getElementById('current-token').textContent   = num ?? '--';
+    document.getElementById('current-patient').textContent = name ?? '';
+  }
+
+  function updateCount(count) {
+    document.getElementById('waiting-count').textContent =
+      `(${count} waiting)`;
+  }
+
+  function renderQueue(queue) {
+    const tbody   = document.getElementById('queue-body');
+    const empty   = document.getElementById('empty-msg');
+    const table   = document.getElementById('queue-table');
+    tbody.innerHTML = '';
+    if (!queue || !queue.length) {
+      table.style.display = 'none';
+      empty.style.display = 'block';
+      empty.textContent   = 'No patients waiting';
+      return;
+    }
+    table.style.display = 'table';
+    empty.style.display = 'none';
+    queue.forEach(item => {
+      tbody.innerHTML += `
+        <tr>
+          <td>${item.position}</td>
+          <td><strong>#${item.tokenNumber}</strong></td>
+          <td>${item.patientName}</td>
+          <td><span class="badge ${item.type}">${item.type}</span></td>
+          <td>${item.estimatedWaitTime} min</td>
+        </tr>
+      `;
+    });
+  }
+</script>
+</body>
+</html>

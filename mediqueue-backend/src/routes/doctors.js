@@ -5,15 +5,21 @@ const authMiddleware = require('../middleware/auth');
 // Add a doctor (admin only)
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
+    // Allow both admin and hospital roles
+    if (req.user.role !== 'admin' && req.user.role !== 'hospital') {
       return res.status(403).json({ message: 'Access denied' });
     }
 
     const { name, hospital, department, avgConsultationTime } = req.body;
 
+    // If hospital role, force their own hospitalId
+    const hospitalId = req.user.role === 'hospital'
+      ? req.user.hospitalId
+      : hospital;
+
     const doctor = new Doctor({
       name,
-      hospital,
+      hospital: hospitalId,
       department,
       avgConsultationTime: avgConsultationTime || 10
     });

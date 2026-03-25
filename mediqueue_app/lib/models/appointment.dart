@@ -1,5 +1,6 @@
 class AppointmentModel {
   final String id;
+  final String doctorId; // add this
   final int tokenNumber;
   final String type;
   final String status;
@@ -13,6 +14,7 @@ class AppointmentModel {
 
   AppointmentModel({
     required this.id,
+    required this.doctorId, // add this
     required this.tokenNumber,
     required this.type,
     required this.status,
@@ -30,6 +32,7 @@ class AppointmentModel {
     final hospital = json['hospital'];
     return AppointmentModel(
       id: json['_id'],
+      doctorId: doctor is Map ? doctor['_id'] : doctor, // add this
       tokenNumber: json['tokenNumber'],
       type: json['type'] ?? 'normal',
       status: json['status'] ?? 'waiting',
