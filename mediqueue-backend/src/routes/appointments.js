@@ -8,28 +8,21 @@ router.post('/', authMiddleware, async (req, res) => {
   try {
     const { doctorId, hospitalId, department, type } = req.body;
 
-    // Get today's date as YYYY-MM-DD
     const today = new Date().toISOString().split('T')[0];
 
-    // Find doctor to get avg consultation time
     const doctor = await Doctor.findById(doctorId);
     if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
 
-    // Count existing appointments for this doctor today
     const existingCount = await Appointment.countDocuments({
       doctor: doctorId,
       date: today,
       status: { $in: ['waiting', 'serving'] }
     });
 
-    // Generate token number
     const tokenNumber = existingCount + 1;
 
-    // Calculate estimated wait time
-    // Emergency patients go to the front, normal patients go to the back
     let estimatedWaitTime;
     if (type === 'emergency') {
-      // Count how many are currently being served or are emergency ahead
       const currentlyServing = await Appointment.findOne({
         doctor: doctorId,
         date: today,
@@ -53,15 +46,17 @@ router.post('/', authMiddleware, async (req, res) => {
 
     await appointment.save();
 
-    // Populate and return full appointment details
     const populated = await Appointment.findById(appointment._id)
       .populate('patient', 'name phone')
       .populate('doctor', 'name department avgConsultationTime')
       .populate('hospital', 'name');
 
-    // Emit socket event so queue updates in real time
+    // Emit only to clients in this doctor's queue room
     const io = req.app.get('io');
-    io.emit(`queue:${doctorId}`, { type: 'NEW_APPOINTMENT', appointment: populated });
+    io.to(`queue:${doctorId}`).emit(`queue:${doctorId}`, {
+      type: 'NEW_APPOINTMENT',
+      appointment: populated
+    });
 
     res.status(201).json(populated);
   } catch (err) {
@@ -88,7 +83,7 @@ router.get('/my', authMiddleware, async (req, res) => {
   }
 });
 
-// Get all appointments for a doctor today (admin/queue view)
+// Get all appointments for a doctor today
 router.get('/doctor/:doctorId', authMiddleware, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
@@ -101,7 +96,6 @@ router.get('/doctor/:doctorId', authMiddleware, async (req, res) => {
       .populate('patient', 'name phone')
       .populate('doctor', 'name department')
       .sort([['type', -1], ['tokenNumber', 1]]);
-      // emergency first (-1), then by token number
 
     res.json(appointments);
   } catch (err) {
