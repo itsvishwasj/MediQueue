@@ -336,6 +336,16 @@ void didChangeDependencies() {
           borderRadius: BorderRadius.circular(16),
           onTap: isReady
     ? () {
+
+        // ✅ SHOW SUCCESS MESSAGE
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Appointment Booked Successfully'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // ✅ NAVIGATE TO TOKEN SCREEN
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -343,7 +353,7 @@ void didChangeDependencies() {
               doctor: doctor!,
               hospital: hospital!,
               department: department!,
-              token: 23, // 🔥 dummy for now
+              token: DateTime.now().millisecondsSinceEpoch % 1000,
             ),
           ),
         );

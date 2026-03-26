@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class TokenScreen extends StatelessWidget {
   final String doctor;
@@ -87,7 +88,11 @@ class TokenScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Center(
-                  child: Icon(Icons.qr_code, size: 120),
+                  child: QrImageView(
+  data: "doctor=$doctor&hospital=$hospital&token=$token",
+  version: QrVersions.auto,
+  size: 180,
+),
                 ),
               ),
 
