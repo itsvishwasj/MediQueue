@@ -40,10 +40,7 @@ class _MainNavigationState extends State<MainNavigation> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FF),
 
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
+      body: _screens[_currentIndex],
 
       bottomNavigationBar: _BottomNav(
         currentIndex: _currentIndex,
