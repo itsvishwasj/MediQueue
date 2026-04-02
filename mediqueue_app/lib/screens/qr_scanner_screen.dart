@@ -3,6 +3,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:http/http.dart' as http; // 🔥 Added for backend connectivity
 import 'queue_screen.dart'; 
 import 'dart:convert';
+import '../config/api.dart';
 
 class QrScannerScreen extends StatefulWidget {
   const QrScannerScreen({super.key});
@@ -296,7 +297,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     try {
       // 🚀 REAL API CALL TO YOUR BACKEND
       final response = await http.post(
-        Uri.parse('http://192.168.0.125:5000/api/queue'), // Replace with your server URL
+        Uri.parse(ApiConfig.queue), // Replace with your server URL
        body: jsonEncode({
   'doctor': doctor,
   'hospital': hospital,

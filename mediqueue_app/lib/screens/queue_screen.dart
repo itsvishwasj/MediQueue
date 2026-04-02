@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'dart:async'; // Required for Timer and Future
+import 'dart:async';
 import 'dart:convert';
+import 'package:http/http.dart' as http; // Make sure this import is added
+import '../config/api.dart';
 
 class QueueScreen extends StatefulWidget {
-  final bool isScanned; // Trigger for the simulation
+  final bool isScanned;
   
   const QueueScreen({super.key, this.isScanned = false});
 
@@ -13,7 +15,7 @@ class QueueScreen extends StatefulWidget {
 
 class _QueueScreenState extends State<QueueScreen> {
   Map<String, dynamic>? selectedAppointment;
-  bool isFetching = true; // Added loading state for fetch simulation
+  bool isFetching = false; // Initialized as false so selector shows immediately
 
   // Theme Constants
   static const _bg = Color(0xFFF0F4FF);
@@ -26,67 +28,64 @@ class _QueueScreenState extends State<QueueScreen> {
     {'doctor': 'Dr. Reddy', 'hospital': 'Apollo Clinic', 'token': 3, 'department': 'General'},
   ];
 
-  // Dynamic queue list
-  late List<Map<String, dynamic>> queue;
-  int currentToken = 3; // Track the "Now Serving" token
+  // Real Data List
+  List<Map<String, dynamic>> queue = [];
+  int currentToken = 0; 
 
   @override
   void initState() {
     super.initState();
     
-    // 1. Initialize local default data
-    queue = [
-      {'token': 4, 'name': 'Rahul'},
-      {'token': 5, 'name': 'Anita'},
-      {'token': 6, 'name': 'Kiran'},
-    ];
-
-    // 2. Simulation Logic: Auto-select and inject if scanned
+    // Auto-select and fetch if the user scanned a QR
     if (widget.isScanned) {
       selectedAppointment = appointments[0];
-      queue.add({'token': 7, 'name': 'You'});
+      _fetchQueue();
     }
-
-    // 3. Start backend fetch simulation
-    _fetchQueue();
-
-    // 4. Live Queue simulation: Ticks up every 10 seconds
-    Timer.periodic(const Duration(seconds: 10), (timer) {
-      if (mounted && selectedAppointment != null && currentToken < 6) {
-        setState(() {
-          currentToken++;
-          if (queue.isNotEmpty) queue.removeAt(0); // Move queue forward
-        });
-      }
-    });
   }
 
-  // Asynchronous fetch logic
-  void _fetchQueue() async {
+  // ✅ MERGED LOGIC: Fetch and map backend keys to UI keys
+  Future<void> _fetchQueue() async {
+    if (selectedAppointment == null) return;
+
+    setState(() => isFetching = true);
+
     try {
-      await Future.delayed(const Duration(seconds: 1)); // Simulate network delay
+      final doctor = selectedAppointment!['doctor'];
+      final hospital = selectedAppointment!['hospital'];
 
-      /*
       final response = await http.get(
-  Uri.parse('http://192.168.0.125:5000/api/queue'),
-);
-      */ 
+        Uri.parse("${ApiConfig.baseUrl}/api/queue/$hospital/$doctor"),
+      );
 
-      if (mounted) {
+      if (response.statusCode == 200) {
+        final List<dynamic> rawData = jsonDecode(response.body);
+
         setState(() {
-          isFetching = false; // Data "retrieved"
+          // Map backend keys ('patientName', 'tokenNumber') to UI keys ('name', 'token')
+          queue = rawData.map((item) {
+            return {
+              'name': item['patientName'] ?? 'Patient',
+              'token': item['tokenNumber'] ?? 0,
+            };
+          }).toList();
+
+          // Set current serving token to the first person in the list
+          if (queue.isNotEmpty) {
+            currentToken = queue.first['token'] ?? 0;
+          }
+          isFetching = false;
         });
       }
     } catch (e) {
       debugPrint("Queue fetch error: $e");
-      if (mounted) setState(() => isFetching = false);
+      setState(() => isFetching = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Show loading spinner during the fake fetch
-    if (isFetching && widget.isScanned) {
+    // Show spinner ONLY when fetching and an appointment is active
+    if (isFetching && selectedAppointment != null) {
       return const Scaffold(
         backgroundColor: _bg,
         body: Center(child: CircularProgressIndicator(color: _primary, strokeWidth: 3)),
@@ -98,12 +97,15 @@ class _QueueScreenState extends State<QueueScreen> {
       body: SafeArea(
         child: selectedAppointment == null
             ? _buildAppointmentSelector()
-            : _buildQueueView(),
+            : RefreshIndicator(
+                onRefresh: _fetchQueue, // Pull to refresh the queue
+                child: _buildQueueView(),
+              ),
       ),
     );
   }
 
-  // ─── SELECT APPOINTMENT ─────────────────────────────────────────────────
+  // ─── UI COMPONENTS (Kept from Code 1) ──────────────────────────────────
 
   Widget _buildAppointmentSelector() {
     return Column(
@@ -127,10 +129,7 @@ class _QueueScreenState extends State<QueueScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: const [
-          Text(
-            'Live Queue',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _ink, letterSpacing: -0.5),
-          ),
+          Text('Live Queue', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _ink, letterSpacing: -0.5)),
           SizedBox(height: 2),
           Text('Select an appointment to track', style: TextStyle(fontSize: 13, color: _muted)),
         ],
@@ -140,16 +139,17 @@ class _QueueScreenState extends State<QueueScreen> {
 
   Widget _buildAppointmentTile(Map<String, dynamic> apt) {
     return GestureDetector(
-      onTap: () => setState(() => selectedAppointment = apt),
+      onTap: () {
+        setState(() => selectedAppointment = apt);
+        _fetchQueue(); // Fetch when clicked
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 14, offset: const Offset(0, 4)),
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 14, offset: const Offset(0, 4))],
         ),
         child: Row(
           children: [
@@ -182,17 +182,16 @@ class _QueueScreenState extends State<QueueScreen> {
     );
   }
 
-  // ─── QUEUE VIEW ─────────────────────────────────────────────────────────
-
   Widget _buildQueueView() {
     final int yourToken = selectedAppointment!['token'] as int;
-    final int ahead = (yourToken - currentToken - 1).clamp(0, 999);
-    double progress = (currentToken / yourToken).clamp(0.0, 1.0); // Progress bar logic
+    final int ahead = (yourToken - currentToken).clamp(0, 999);
+    double progress = yourToken == 0 ? 0 : (currentToken / yourToken).clamp(0.0, 1.0);
 
-    return Column(
+    return ListView( // Changed to ListView to support RefreshIndicator
+      padding: EdgeInsets.zero,
       children: [
         _buildQueueHeader(currentToken, yourToken, ahead, progress),
-        Expanded(child: _buildQueueList()),
+        _buildQueueList(),
       ],
     );
   }
@@ -288,48 +287,49 @@ class _QueueScreenState extends State<QueueScreen> {
             ],
           ),
         ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            itemCount: queue.length,
-            itemBuilder: (_, i) {
-              final person = queue[i];
-              final token = person['token'] as int;
-              final isMe = person['name'] == 'You';
+        ListView.builder(
+          shrinkWrap: true, // Important since it's inside a parent ListView
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          itemCount: queue.length,
+          itemBuilder: (_, i) {
+            final person = queue[i];
+            final token = person['token'] as int;
+            // logic to highlight "You" if your token matches the list item
+            final bool isMe = token == selectedAppointment!['token'];
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: isMe ? _primary.withOpacity(0.05) : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: isMe ? Border.all(color: _primary.withOpacity(0.2), width: 1.5) : null,
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2))],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 38, height: 38,
-                      decoration: BoxDecoration(color: isMe ? _primary : _primary.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
-                      child: Center(child: Text('#$token', style: TextStyle(color: isMe ? Colors.white : _primary, fontWeight: FontWeight.w800, fontSize: 13))),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(person['name'].toString(), style: TextStyle(fontWeight: isMe ? FontWeight.w700 : FontWeight.w600, fontSize: 14, color: isMe ? _primary : _ink)),
-                    const Spacer(),
-                    if (isMe) const Icon(Icons.stars_rounded, color: _primary, size: 20)
-                    else Text('~${(token - currentToken) * 10} min', style: const TextStyle(fontSize: 12, color: _muted)),
-                  ],
-                ),
-              );
-            },
-          ),
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: isMe ? _primary.withOpacity(0.05) : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: isMe ? Border.all(color: _primary.withOpacity(0.2), width: 1.5) : null,
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2))],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(color: isMe ? _primary : _primary.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
+                    child: Center(child: Text('#$token', style: TextStyle(color: isMe ? Colors.white : _primary, fontWeight: FontWeight.w800, fontSize: 13))),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(isMe ? "You" : person['name'].toString(), style: TextStyle(fontWeight: isMe ? FontWeight.w700 : FontWeight.w600, fontSize: 14, color: isMe ? _primary : _ink)),
+                  const Spacer(),
+                  if (isMe) const Icon(Icons.stars_rounded, color: _primary, size: 20)
+                  else Text('~${(token - currentToken).clamp(0, 99) * 10} min', style: const TextStyle(fontSize: 12, color: _muted)),
+                ],
+              ),
+            );
+          },
         ),
       ],
     );
   }
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers (Kept from Code 1) ──────────────────────────────────────────────
 
 class _LivePill extends StatelessWidget {
   @override

@@ -1,34 +1,27 @@
 const express = require('express');
 const router = express.Router();
-
-// 🔥 FINAL WORKING API (NO DB, NO AUTH)
+const Appointment = require('../models/Appointment');
 
 router.post('/', async (req, res) => {
   try {
-    console.log("🔥 API HIT");
-    console.log("BODY:", req.body);
-
     const { doctor, hospital, department } = req.body;
 
-    // simple validation
-    if (!doctor || !hospital || !department) {
-      return res.status(400).json({ message: "Missing fields" });
-    }
-
-    // generate token
     const tokenNumber = Math.floor(Math.random() * 1000);
 
-    return res.status(201).json({
+    const appointment = new Appointment({
       doctor,
       hospital,
       department,
       tokenNumber,
       status: "waiting",
-      date: new Date().toISOString().split("T")[0],
     });
 
+    await appointment.save();
+
+    return res.status(201).json(appointment);
+
   } catch (err) {
-    console.error("ERROR:", err);
+    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });

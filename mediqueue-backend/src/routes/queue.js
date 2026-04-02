@@ -222,4 +222,42 @@ router.post('/checkin/:appointmentId', async (req, res) => {
   }
 });
 
+router.get('/:hospital/:doctor', async (req, res) => {
+  try {
+    const { hospital, doctor } = req.params;
+
+    const queue = await Appointment.find({
+      hospital,
+      doctor,
+      status: { $in: ['waiting', 'serving'] }
+    }).sort({ tokenNumber: 1 });
+
+    res.json(queue);
+
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching queue" });
+  }
+});
+
+router.put('/update/:id', async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    const appointment = await Appointment.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+
+    // 🔥 EMIT UPDATE
+    const io = req.app.get('io');
+    io.emit('queueUpdated');
+
+    res.json(appointment);
+
+  } catch (err) {
+    res.status(500).json({ message: "Update failed" });
+  }
+});
+
 module.exports = router;
