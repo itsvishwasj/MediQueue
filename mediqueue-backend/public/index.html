@@ -3,510 +3,168 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>MediQueue — Smart Hospital Queue</title>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <title>MediQueue — Smart Hospital Queue System</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700;9..40,800;9..40,900&display=swap" rel="stylesheet"/>
   <style>
-    :root {
-      --blue:    #1847F0;
-      --blue-lt: #EEF2FF;
-      --green:   #00C97A;
-      --dark:    #0A0F1E;
-      --mid:     #3D4466;
-      --muted:   #8891B0;
-      --surface: #F5F7FF;
-      --white:   #FFFFFF;
-      --radius:  16px;
+    :root{
+      --primary:#2563EB;--primary-lt:rgba(37,99,235,0.08);
+      --success:#00C97A;--warning:#F59E0B;--danger:#F03B3B;
+      --bg:#F0F4FF;--ink:#0F172A;--mid:#334155;--muted:#64748B;
+      --surface:#FFFFFF;--border:rgba(37,99,235,0.1);
+      --shadow:0 4px 24px rgba(37,99,235,0.08);--radius:20px;
     }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);}
 
-    * { margin:0; padding:0; box-sizing:border-box; }
-
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background: var(--white);
-      color: var(--dark);
-      overflow-x: hidden;
+    nav{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:0 48px;height:64px;
+      background:rgba(255,255,255,0.9);backdrop-filter:blur(16px);
+      border-bottom:1px solid var(--border);
+      position:sticky;top:0;z-index:100;
     }
+    .logo{display:flex;align-items:center;gap:10px;}
+    .logo-icon{width:36px;height:36px;background:var(--primary);border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-weight:900;font-size:18px;}
+    .logo-text{font-size:18px;font-weight:800;color:var(--ink);letter-spacing:-0.4px;}
+    .live-badge{display:flex;align-items:center;gap:6px;background:rgba(0,201,122,0.1);border:1px solid rgba(0,201,122,0.25);border-radius:20px;padding:5px 12px;}
+    .live-dot{width:7px;height:7px;background:var(--success);border-radius:50%;animation:pulse 1.8s infinite;}
+    .live-badge span{font-size:12px;font-weight:700;color:var(--success);}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(1.5);}}
 
-    /* ── NAV ─────────────────────────────── */
-    nav {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 20px 48px;
-      position: sticky;
-      top: 0;
-      background: rgba(255,255,255,0.85);
-      backdrop-filter: blur(12px);
-      z-index: 100;
-      border-bottom: 1px solid rgba(24,71,240,0.08);
-    }
+    .hero{max-width:900px;margin:0 auto;padding:80px 24px 64px;text-align:center;}
+    .hero-badge{display:inline-flex;align-items:center;gap:8px;background:var(--primary-lt);border:1px solid rgba(37,99,235,0.2);border-radius:20px;padding:6px 16px;font-size:13px;color:var(--primary);font-weight:600;margin-bottom:28px;}
+    .hero h1{font-size:clamp(36px,6vw,68px);font-weight:900;line-height:1.05;letter-spacing:-2px;color:var(--ink);margin-bottom:20px;}
+    .hero h1 em{font-style:normal;color:var(--primary);position:relative;}
+    .hero h1 em::after{content:'';position:absolute;bottom:4px;left:0;right:0;height:4px;background:var(--success);border-radius:2px;opacity:0.5;}
+    .hero p{font-size:17px;color:var(--muted);max-width:480px;margin:0 auto 48px;line-height:1.7;}
 
-    .logo {
-      font-family: 'Syne', sans-serif;
-      font-weight: 800;
-      font-size: 22px;
-      color: var(--blue);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+    .portals{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;}
+    .portal-card{width:280px;background:var(--surface);border:1.5px solid var(--border);border-radius:24px;padding:28px;text-decoration:none;color:inherit;transition:transform 0.22s,box-shadow 0.22s,border-color 0.22s;}
+    .portal-card:hover{transform:translateY(-5px);box-shadow:0 20px 48px rgba(37,99,235,0.12);}
+    .portal-card.hosp:hover{border-color:var(--primary);}
+    .portal-card.adm:hover{border-color:var(--success);}
+    .p-icon{width:50px;height:50px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:16px;}
+    .hosp .p-icon{background:var(--primary-lt);}
+    .adm  .p-icon{background:rgba(0,201,122,0.1);}
+    .portal-card h2{font-size:18px;font-weight:800;margin-bottom:8px;letter-spacing:-0.3px;}
+    .portal-card p{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:24px;}
+    .p-link{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:700;}
+    .hosp .p-link{color:var(--primary);}
+    .adm  .p-link{color:var(--success);}
+    .p-link .arr{transition:transform 0.2s;}
+    .portal-card:hover .arr{transform:translateX(4px);}
 
-    .logo-dot {
-      width: 8px; height: 8px;
-      background: var(--green);
-      border-radius: 50%;
-      animation: pulse 2s infinite;
-    }
+    .stats-strip{display:flex;justify-content:center;gap:0;background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-top:64px;}
+    .stat{flex:1;max-width:220px;text-align:center;padding:32px 20px;border-right:1px solid var(--border);}
+    .stat:last-child{border-right:none;}
+    .stat .v{font-size:30px;font-weight:900;color:var(--primary);letter-spacing:-1px;}
+    .stat .l{font-size:12px;color:var(--muted);font-weight:500;margin-top:4px;}
 
-    @keyframes pulse {
-      0%,100% { opacity:1; transform:scale(1); }
-      50%      { opacity:0.5; transform:scale(1.4); }
-    }
+    .section{padding:72px 24px;}
+    .s-head{text-align:center;margin-bottom:48px;}
+    .s-tag{display:inline-block;background:var(--primary-lt);color:var(--primary);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:14px;}
+    .section h2{font-size:clamp(22px,4vw,38px);font-weight:900;letter-spacing:-1px;margin-bottom:10px;}
+    .s-sub{font-size:15px;color:var(--muted);}
 
-    .nav-tag {
-      font-size: 13px;
-      color: var(--muted);
-      background: var(--surface);
-      padding: 6px 14px;
-      border-radius: 20px;
-      border: 1px solid rgba(24,71,240,0.1);
-    }
+    .feat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;max-width:960px;margin:0 auto;}
+    .feat{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px;transition:transform 0.2s,box-shadow 0.2s;}
+    .feat:hover{transform:translateY(-3px);box-shadow:var(--shadow);}
+    .feat-ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px;}
+    .feat h3{font-size:14px;font-weight:800;margin-bottom:5px;}
+    .feat p{font-size:12px;color:var(--muted);line-height:1.6;}
 
-    /* ── HERO ────────────────────────────── */
-    .hero {
-      min-height: 92vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 80px 24px 60px;
-      text-align: center;
-      position: relative;
-    }
+    .dark{background:var(--ink);padding:72px 24px;}
+    .dark .s-tag{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.5);}
+    .dark h2{color:white;}
+    .dark .s-sub{color:rgba(255,255,255,0.35);}
+    .steps{display:flex;max-width:900px;margin:0 auto;flex-wrap:wrap;justify-content:center;}
+    .step{flex:1;min-width:160px;max-width:200px;text-align:center;padding:0 20px;position:relative;}
+    .step:not(:last-child)::after{content:'→';position:absolute;right:-14px;top:20px;color:rgba(255,255,255,0.15);font-size:16px;}
+    .step-n{width:44px;height:44px;border-radius:12px;background:rgba(37,99,235,0.2);border:1px solid rgba(37,99,235,0.3);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:var(--primary);margin:0 auto 14px;}
+    .step h3{font-size:13px;font-weight:700;color:white;margin-bottom:5px;}
+    .step p{font-size:12px;color:rgba(255,255,255,0.35);line-height:1.5;}
 
-    .hero::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background:
-        radial-gradient(ellipse 60% 50% at 50% 0%, rgba(24,71,240,0.07) 0%, transparent 70%),
-        radial-gradient(ellipse 40% 30% at 80% 60%, rgba(0,201,122,0.05) 0%, transparent 60%);
-      pointer-events: none;
-    }
-
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--blue-lt);
-      border: 1px solid rgba(24,71,240,0.2);
-      border-radius: 20px;
-      padding: 6px 16px;
-      font-size: 13px;
-      color: var(--blue);
-      font-weight: 500;
-      margin-bottom: 32px;
-      animation: fadeUp 0.6s ease both;
-    }
-
-    .hero h1 {
-      font-family: 'Syne', sans-serif;
-      font-size: clamp(42px, 7vw, 80px);
-      font-weight: 800;
-      line-height: 1.05;
-      letter-spacing: -2px;
-      max-width: 800px;
-      margin-bottom: 24px;
-      animation: fadeUp 0.6s 0.1s ease both;
-    }
-
-    .hero h1 .accent {
-      color: var(--blue);
-      position: relative;
-    }
-
-    .hero h1 .accent::after {
-      content: '';
-      position: absolute;
-      bottom: 4px; left: 0; right: 0;
-      height: 4px;
-      background: var(--green);
-      border-radius: 2px;
-      opacity: 0.6;
-    }
-
-    .hero p {
-      font-size: 18px;
-      color: var(--mid);
-      max-width: 480px;
-      line-height: 1.7;
-      margin-bottom: 56px;
-      font-weight: 300;
-      animation: fadeUp 0.6s 0.2s ease both;
-    }
-
-    /* ── PORTAL CARDS ─────────────────────── */
-    .portals {
-      display: flex;
-      gap: 20px;
-      flex-wrap: wrap;
-      justify-content: center;
-      animation: fadeUp 0.6s 0.3s ease both;
-    }
-
-    .portal-card {
-      width: 300px;
-      background: var(--white);
-      border: 1.5px solid rgba(24,71,240,0.12);
-      border-radius: 24px;
-      padding: 32px;
-      text-decoration: none;
-      color: inherit;
-      transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .portal-card::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      opacity: 0;
-      transition: opacity 0.3s;
-      border-radius: 24px;
-    }
-
-    .portal-card.hospital::before {
-      background: radial-gradient(ellipse at top left, rgba(24,71,240,0.06), transparent 60%);
-    }
-
-    .portal-card.admin::before {
-      background: radial-gradient(ellipse at top left, rgba(0,201,122,0.06), transparent 60%);
-    }
-
-    .portal-card:hover {
-      transform: translateY(-6px);
-      box-shadow: 0 24px 60px rgba(24,71,240,0.12);
-    }
-
-    .portal-card.hospital:hover { border-color: var(--blue); }
-    .portal-card.admin:hover    { border-color: var(--green); }
-    .portal-card:hover::before  { opacity: 1; }
-
-    .portal-icon {
-      width: 56px; height: 56px;
-      border-radius: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      margin-bottom: 20px;
-    }
-
-    .hospital .portal-icon { background: var(--blue-lt); }
-    .admin    .portal-icon { background: #EAFAF3; }
-
-    .portal-card h2 {
-      font-family: 'Syne', sans-serif;
-      font-size: 20px;
-      font-weight: 700;
-      margin-bottom: 10px;
-    }
-
-    .portal-card p {
-      font-size: 14px;
-      color: var(--muted);
-      line-height: 1.6;
-      margin-bottom: 28px;
-    }
-
-    .portal-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    .hospital .portal-link { color: var(--blue); }
-    .admin    .portal-link { color: var(--green); }
-
-    .portal-link .arrow {
-      transition: transform 0.2s;
-    }
-
-    .portal-card:hover .arrow { transform: translateX(4px); }
-
-    /* ── FEATURES ────────────────────────── */
-    .features-section {
-      padding: 80px 48px;
-      background: var(--dark);
-      color: var(--white);
-    }
-
-    .features-header {
-      text-align: center;
-      margin-bottom: 56px;
-    }
-
-    .features-header h2 {
-      font-family: 'Syne', sans-serif;
-      font-size: 36px;
-      font-weight: 800;
-      margin-bottom: 12px;
-    }
-
-    .features-header p {
-      color: #6B7280;
-      font-size: 16px;
-    }
-
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 24px;
-      max-width: 960px;
-      margin: 0 auto;
-    }
-
-    .feature-card {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 20px;
-      padding: 28px;
-      transition: background 0.2s;
-    }
-
-    .feature-card:hover {
-      background: rgba(255,255,255,0.07);
-    }
-
-    .feature-emoji {
-      font-size: 28px;
-      margin-bottom: 16px;
-      display: block;
-    }
-
-    .feature-card h3 {
-      font-family: 'Syne', sans-serif;
-      font-size: 16px;
-      font-weight: 700;
-      margin-bottom: 8px;
-    }
-
-    .feature-card p {
-      font-size: 14px;
-      color: #6B7280;
-      line-height: 1.6;
-    }
-
-    /* ── FLOW SECTION ────────────────────── */
-    .flow-section {
-      padding: 80px 48px;
-      background: var(--surface);
-    }
-
-    .flow-header {
-      text-align: center;
-      margin-bottom: 56px;
-    }
-
-    .flow-header h2 {
-      font-family: 'Syne', sans-serif;
-      font-size: 36px;
-      font-weight: 800;
-      margin-bottom: 12px;
-    }
-
-    .flow-steps {
-      display: flex;
-      justify-content: center;
-      gap: 0;
-      flex-wrap: wrap;
-      max-width: 960px;
-      margin: 0 auto;
-    }
-
-    .flow-step {
-      flex: 1;
-      min-width: 160px;
-      max-width: 200px;
-      text-align: center;
-      padding: 0 16px;
-      position: relative;
-    }
-
-    .flow-step:not(:last-child)::after {
-      content: '→';
-      position: absolute;
-      right: -12px;
-      top: 28px;
-      color: var(--muted);
-      font-size: 20px;
-    }
-
-    .step-circle {
-      width: 56px; height: 56px;
-      border-radius: 50%;
-      background: var(--blue);
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: 'Syne', sans-serif;
-      font-size: 20px;
-      font-weight: 800;
-      margin: 0 auto 16px;
-    }
-
-    .flow-step h3 {
-      font-family: 'Syne', sans-serif;
-      font-size: 14px;
-      font-weight: 700;
-      margin-bottom: 6px;
-    }
-
-    .flow-step p {
-      font-size: 13px;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-
-    /* ── FOOTER ──────────────────────────── */
-    footer {
-      background: var(--dark);
-      color: #6B7280;
-      text-align: center;
-      padding: 24px;
-      font-size: 13px;
-    }
-
-    footer span { color: var(--blue); }
-
-    /* ── ANIMATIONS ──────────────────────── */
-    @keyframes fadeUp {
-      from { opacity:0; transform:translateY(20px); }
-      to   { opacity:1; transform:translateY(0); }
-    }
-
-    @media (max-width: 600px) {
-      nav { padding: 16px 24px; }
-      .features-section, .flow-section { padding: 60px 24px; }
-      .flow-step:not(:last-child)::after { display: none; }
-    }
+    footer{background:var(--ink);border-top:1px solid rgba(255,255,255,0.05);padding:20px 48px;display:flex;align-items:center;justify-content:space-between;}
+    .f-logo{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;color:white;}
+    .f-icon{width:26px;height:26px;background:var(--primary);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:white;}
+    footer p{font-size:12px;color:rgba(255,255,255,0.25);}
+    @media(max-width:640px){nav{padding:0 20px;}.stats-strip{flex-wrap:wrap;}.stat{min-width:50%;}.step:not(:last-child)::after{display:none;}footer{flex-direction:column;gap:10px;text-align:center;}}
   </style>
 </head>
 <body>
 
 <nav>
   <div class="logo">
-    <div class="logo-dot"></div>
-    MediQueue
+    <div class="logo-icon">+</div>
+    <span class="logo-text">MediQueue</span>
   </div>
-  <span class="nav-tag">Hackathon Project 2025</span>
+  <div class="live-badge">
+    <div class="live-dot"></div>
+    <span>System Live</span>
+  </div>
 </nav>
 
-<section class="hero">
-  <div class="hero-badge">
-    ⚡ Real-time Queue Management System
-  </div>
-  <h1>
-    Smart queues for<br/>
-    <span class="accent">smarter hospitals</span>
-  </h1>
-  <p>
-    Patients book slots, track queues live, and skip the chaos.
-    Hospitals manage everything from one dashboard.
-  </p>
-
+<div class="hero">
+  <div class="hero-badge">⚡ Real-time Queue Management System</div>
+  <h1>Smart queues for<br/><em>smarter hospitals</em></h1>
+  <p>Patients book slots, track queues live, and skip the chaos. Hospitals manage everything from one dashboard.</p>
   <div class="portals">
-    <a href="/hospital.html" class="portal-card hospital">
-      <div class="portal-icon">🏥</div>
+    <a href="/hospital.html" class="portal-card hosp">
+      <div class="p-icon">🏥</div>
       <h2>Hospital Portal</h2>
-      <p>Register your hospital, manage doctors, print QR codes and handle patient queues in real time.</p>
-      <span class="portal-link">
-        Open Portal <span class="arrow">→</span>
-      </span>
+      <p>Register, add doctors, print QR codes, and manage live patient queues in real time.</p>
+      <span class="p-link">Open Portal <span class="arr">→</span></span>
     </a>
-
-    <a href="/dashboard.html" class="portal-card admin">
-      <div class="portal-icon">📊</div>
+    <a href="/dashboard.html" class="portal-card adm">
+      <div class="p-icon">🛡️</div>
       <h2>Admin Dashboard</h2>
-      <p>Bird's-eye view of all hospitals, doctors, and live queues across the entire platform.</p>
-      <span class="portal-link">
-        Open Dashboard <span class="arrow">→</span>
-      </span>
+      <p>System setup — add hospitals and doctors to the MediQueue network quickly.</p>
+      <span class="p-link">Open Dashboard <span class="arr">→</span></span>
     </a>
   </div>
-</section>
+</div>
 
-<section class="flow-section">
-  <div class="flow-header">
-    <h2>How it works</h2>
-    <p>Four simple steps from booking to consultation</p>
-  </div>
-  <div class="flow-steps">
-    <div class="flow-step">
-      <div class="step-circle">1</div>
-      <h3>Hospital registers</h3>
-      <p>Hospital joins MediQueue and adds their doctors</p>
-    </div>
-    <div class="flow-step">
-      <div class="step-circle">2</div>
-      <h3>QR codes printed</h3>
-      <p>Each doctor gets a QR code placed outside their cabin</p>
-    </div>
-    <div class="flow-step">
-      <div class="step-circle">3</div>
-      <h3>Patient scans & books</h3>
-      <p>Patient scans QR → books token → gets their own QR</p>
-    </div>
-    <div class="flow-step">
-      <div class="step-circle">4</div>
-      <h3>Live queue tracking</h3>
-      <p>Everyone sees real-time updates as queue moves forward</p>
-    </div>
-  </div>
-</section>
+<div class="stats-strip">
+  <div class="stat"><div class="v">100%</div><div class="l">Real-time Updates</div></div>
+  <div class="stat"><div class="v">0s</div><div class="l">Manual Effort</div></div>
+  <div class="stat"><div class="v">∞</div><div class="l">Hospitals Supported</div></div>
+  <div class="stat"><div class="v">QR</div><div class="l">Contactless Check-in</div></div>
+</div>
 
-<section class="features-section">
-  <div class="features-header">
+<section class="section" style="background:var(--surface);">
+  <div class="s-head">
+    <div class="s-tag">Features</div>
     <h2>Built for the real world</h2>
-    <p>Everything a hospital needs, nothing it doesn't</p>
+    <p class="s-sub">Everything a hospital needs, nothing it doesn't</p>
   </div>
-  <div class="features-grid">
-    <div class="feature-card">
-      <span class="feature-emoji">📱</span>
-      <h3>Mobile Booking</h3>
-      <p>Patients book from the MediQueue Flutter app, anywhere, anytime</p>
-    </div>
-    <div class="feature-card">
-      <span class="feature-emoji">🔢</span>
-      <h3>Token System</h3>
-      <p>Auto-generated tokens with emergency priority — no manual work</p>
-    </div>
-    <div class="feature-card">
-      <span class="feature-emoji">⚡</span>
-      <h3>Live Updates</h3>
-      <p>Socket.io pushes real-time queue changes to every connected device</p>
-    </div>
-    <div class="feature-card">
-      <span class="feature-emoji">📷</span>
-      <h3>QR Check-in</h3>
-      <p>Patient scans at cabin door — queue advances automatically</p>
-    </div>
-    <div class="feature-card">
-      <span class="feature-emoji">🚨</span>
-      <h3>Emergency Priority</h3>
-      <p>Emergency patients jump the queue — handled gracefully by the system</p>
-    </div>
-    <div class="feature-card">
-      <span class="feature-emoji">🏥</span>
-      <h3>Multi-Hospital</h3>
-      <p>Each hospital manages their own doctors and queues independently</p>
-    </div>
+  <div class="feat-grid">
+    <div class="feat"><div class="feat-ico" style="background:var(--primary-lt);">📱</div><h3>Mobile Booking</h3><p>Patients book from the MediQueue Flutter app, anywhere, anytime.</p></div>
+    <div class="feat"><div class="feat-ico" style="background:rgba(0,201,122,0.1);">🔢</div><h3>Smart Token System</h3><p>Auto-generated tokens with emergency priority — no manual work.</p></div>
+    <div class="feat"><div class="feat-ico" style="background:rgba(245,158,11,0.1);">⚡</div><h3>Live Queue Updates</h3><p>Socket.io pushes changes to every connected device instantly.</p></div>
+    <div class="feat"><div class="feat-ico" style="background:rgba(240,59,59,0.08);">📷</div><h3>QR Check-in</h3><p>Patient scans at cabin door — queue advances automatically.</p></div>
+    <div class="feat"><div class="feat-ico" style="background:rgba(240,59,59,0.08);">🚨</div><h3>Emergency Priority</h3><p>Emergency patients jump the queue, handled gracefully.</p></div>
+    <div class="feat"><div class="feat-ico" style="background:var(--primary-lt);">🏥</div><h3>Multi-Hospital</h3><p>Each hospital manages their own doctors and queues independently.</p></div>
   </div>
 </section>
+
+<section class="dark">
+  <div class="s-head">
+    <div class="s-tag">Flow</div>
+    <h2>How it works</h2>
+    <p class="s-sub">Four steps from registration to consultation</p>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="step-n">1</div><h3>Hospital registers</h3><p>Joins MediQueue and adds their doctors via the portal</p></div>
+    <div class="step"><div class="step-n">2</div><h3>QR codes printed</h3><p>Each doctor gets a QR placed outside their cabin</p></div>
+    <div class="step"><div class="step-n">3</div><h3>Patient scans & books</h3><p>Scans QR → books token → gets their own QR</p></div>
+    <div class="step"><div class="step-n">4</div><h3>Live queue tracking</h3><p>Everyone sees real-time updates as queue moves</p></div>
+  </div>
+</section>
+
+<footer>
+  <div class="f-logo"><div class="f-icon">+</div>MediQueue</div>
+  <p>Hackathon 2025 · Node.js + MongoDB + Flutter + Socket.io</p>
+</footer>
 
 </body>
 </html>

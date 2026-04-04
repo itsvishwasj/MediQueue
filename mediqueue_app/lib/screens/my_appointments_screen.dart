@@ -1,20 +1,49 @@
 import 'package:flutter/material.dart';
+import '../services/appointment_service.dart';
+import '../models/appointment.dart';
+import 'queue_screen.dart';
 
-class MyAppointmentsScreen extends StatelessWidget {
+class MyAppointmentsScreen extends StatefulWidget {
   const MyAppointmentsScreen({super.key});
 
+  @override
+  State<MyAppointmentsScreen> createState() => _MyAppointmentsScreenState();
+}
+
+class _MyAppointmentsScreenState extends State<MyAppointmentsScreen> {
   static const _bg = Color(0xFFF0F4FF);
   static const _primary = Color(0xFF2563EB);
   static const _ink = Color(0xFF0F172A);
   static const _muted = Color(0xFF64748B);
 
+  List<AppointmentModel> _appointments = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAppointments();
+  }
+
+  // 🔥 API: Fetch user's actual booked appointments
+  Future<void> _fetchAppointments() async {
+    try {
+      final data = await AppointmentService.getMyAppointments();
+      if (mounted) {
+        setState(() {
+          // Sort so newest or currently waiting are at the top
+          _appointments = data.reversed.toList(); 
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching appointments: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final data = [
-      {'doctor': 'Dr. Sharma', 'hospital': 'City Hospital', 'department': 'Cardiology', 'token': '07', 'time': '10:30 AM', 'status': 'Waiting'},
-      {'doctor': 'Dr. Reddy', 'hospital': 'Apollo Clinic', 'department': 'General', 'token': '03', 'time': '11:00 AM', 'status': 'Serving'},
-    ];
-
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
@@ -22,12 +51,17 @@ class MyAppointmentsScreen extends StatelessWidget {
           children: [
             _buildTopBar(),
             Expanded(
-              child: data.isEmpty
+              child: _isLoading 
+                ? const Center(child: CircularProgressIndicator(color: _primary))
+                : _appointments.isEmpty
                   ? _buildEmpty()
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-                      itemCount: data.length,
-                      itemBuilder: (_, i) => _AppointmentCard(data: data[i]),
+                  : RefreshIndicator(
+                      onRefresh: _fetchAppointments,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+                        itemCount: _appointments.length,
+                        itemBuilder: (_, i) => _AppointmentCard(appointment: _appointments[i]),
+                      ),
                     ),
             ),
           ],
@@ -61,7 +95,7 @@ class MyAppointmentsScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
             ),
-            child: const Text('Today', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _primary)),
+            child: const Text('Refresh', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _primary)),
           ),
         ],
       ),
@@ -93,8 +127,8 @@ class MyAppointmentsScreen extends StatelessWidget {
 }
 
 class _AppointmentCard extends StatelessWidget {
-  final Map<String, String> data;
-  const _AppointmentCard({required this.data});
+  final AppointmentModel appointment;
+  const _AppointmentCard({required this.appointment});
 
   static const _primary = Color(0xFF2563EB);
   static const _ink = Color(0xFF0F172A);
@@ -102,7 +136,8 @@ class _AppointmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isServing = data['status'] == 'Serving';
+    final isServing = appointment.status == 'serving';
+    final isCompleted = appointment.status == 'completed';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -135,18 +170,18 @@ class _AppointmentCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        data['doctor'] ?? '',
+                        appointment.doctorName,
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _ink),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${data['department']} · ${data['hospital']}',
+                        '${appointment.doctorDepartment} · ${appointment.hospitalName}',
                         style: const TextStyle(fontSize: 12, color: _muted),
                       ),
                     ],
                   ),
                 ),
-                _StatusBadge(isServing: isServing, label: data['status'] ?? ''),
+                _StatusBadge(isServing: isServing, isCompleted: isCompleted, label: appointment.status.toUpperCase()),
               ],
             ),
           ),
@@ -159,20 +194,29 @@ class _AppointmentCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                _MetaChip(icon: Icons.confirmation_number_outlined, label: 'Token #${data['token']}'),
+                _MetaChip(icon: Icons.confirmation_number_outlined, label: 'Token #${appointment.tokenNumber}'),
                 const SizedBox(width: 10),
-                _MetaChip(icon: Icons.access_time_rounded, label: data['time'] ?? ''),
+                _MetaChip(icon: Icons.access_time_rounded, label: appointment.type == 'emergency' ? 'EMERGENCY' : 'Regular'),
                 const Spacer(),
-                GestureDetector(
-                  onTap: () {},
-                  child: Row(
-                    children: const [
-                      Text('Track', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _primary)),
-                      SizedBox(width: 3),
-                      Icon(Icons.arrow_forward_rounded, size: 13, color: _primary),
-                    ],
+                if (!isCompleted)
+                  GestureDetector(
+                    onTap: () {
+                      // Navigate to queue screen and auto-select this appointment
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const QueueScreen(isScanned: false),
+                        ),
+                      );
+                    },
+                    child: Row(
+                      children: const [
+                        Text('Track', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _primary)),
+                        SizedBox(width: 3),
+                        Icon(Icons.arrow_forward_rounded, size: 13, color: _primary),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -184,13 +228,23 @@ class _AppointmentCard extends StatelessWidget {
 
 class _StatusBadge extends StatelessWidget {
   final bool isServing;
+  final bool isCompleted;
   final String label;
-  const _StatusBadge({required this.isServing, required this.label});
+  
+  const _StatusBadge({required this.isServing, required this.isCompleted, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    final color = isServing ? const Color(0xFF059669) : const Color(0xFFD97706);
-    final bg = isServing ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB);
+    Color color = const Color(0xFFD97706); // Waiting (Orange)
+    Color bg = const Color(0xFFFFFBEB);
+    
+    if (isServing) {
+      color = const Color(0xFF059669); // Serving (Green)
+      bg = const Color(0xFFECFDF5);
+    } else if (isCompleted) {
+      color = const Color(0xFF64748B); // Completed (Gray)
+      bg = const Color(0xFFF1F5F9);
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -200,7 +254,7 @@ class _StatusBadge extends StatelessWidget {
         children: [
           Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           const SizedBox(width: 5),
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 10)),
         ],
       ),
     );

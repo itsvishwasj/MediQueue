@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:http/http.dart' as http; // 🔥 Added for backend connectivity
+import 'package:http/http.dart' as http; 
 import 'queue_screen.dart'; 
 import 'dart:convert';
 import '../config/api.dart';
@@ -200,8 +200,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
     // Data Extraction Logic
     final parts = scannedData!.split('&');
-    String doctor = 'Not Found';
-    String hospital = 'Not Found';
+    String doctor = 'Verified';
+    String hospital = 'System';
     String token = '00';
 
     for (var part in parts) {
@@ -282,30 +282,33 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       const SnackBar(content: Text('Updating Queue...'), duration: Duration(milliseconds: 800)),
     );
 
-    // Re-parse data for the request
+    // Re-parse data to get the MongoDB ID
     final parts = scannedData!.split('&');
-    String doctor = '';
-    String hospital = '';
-    String token = '';
+    String appointmentId = '';
 
     for (var part in parts) {
-      if (part.startsWith('doctor=')) doctor = part.replaceFirst('doctor=', '');
-      if (part.startsWith('hospital=')) hospital = part.replaceFirst('hospital=', '');
-      if (part.startsWith('token=')) token = part.replaceFirst('token=', '');
+      if (part.startsWith('id=')) appointmentId = part.replaceFirst('id=', '');
+    }
+
+    // Fallback if the QR code is just the raw ID string
+    if (!scannedData!.contains('=')) {
+      appointmentId = scannedData!;
+    }
+
+    if (appointmentId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(backgroundColor: Colors.red, content: Text('Invalid QR format. Missing ID.')),
+      );
+      setState(() => isUpdatingQueue = false);
+      return;
     }
 
     try {
       // 🚀 REAL API CALL TO YOUR BACKEND
-      final response = await http.post(
-        Uri.parse(ApiConfig.queue), // Replace with your server URL
-       body: jsonEncode({
-  'doctor': doctor,
-  'hospital': hospital,
-  'token': token,
-}),
-headers: {
-  'Content-Type': 'application/json',
-},
+      final response = await http.put(
+        Uri.parse('${ApiConfig.baseUrl}/api/queue/update/$appointmentId'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'status': 'serving'}),
       );
 
       if (response.statusCode == 200 && mounted) {
@@ -314,12 +317,12 @@ headers: {
         );
 
         // Navigate to the Queue Screen
-        Navigator.push(
+        Navigator.pushReplacement(
           context, 
           MaterialPageRoute(builder: (context) => const QueueScreen(isScanned: true))
         );
       } else {
-        throw Exception('Failed to update queue');
+        throw Exception('Failed to update queue: ${response.statusCode}');
       }
     } catch (e) {
       if (mounted) {
@@ -338,7 +341,7 @@ headers: {
         Icon(icon, size: 18, color: _muted),
         const SizedBox(width: 8),
         Text('$label: ', style: const TextStyle(color: _muted, fontSize: 14)),
-        Text(value, style: const TextStyle(color: _ink, fontWeight: FontWeight.w600, fontSize: 14)),
+        Expanded(child: Text(value, style: const TextStyle(color: _ink, fontWeight: FontWeight.w600, fontSize: 14), overflow: TextOverflow.ellipsis)),
       ],
     );
   }

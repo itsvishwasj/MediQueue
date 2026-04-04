@@ -3,1139 +3,661 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>MediQueue — Hospital Portal</title>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <title>MediQueue — Hospital Command Center</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800;9..40,900&display=swap" rel="stylesheet"/>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
-    :root {
-      --blue:    #1847F0;
-      --blue-lt: #EEF2FF;
-      --green:   #00C97A;
-      --green-lt:#EAFAF3;
-      --red:     #F03B3B;
-      --red-lt:  #FEF2F2;
-      --dark:    #0A0F1E;
-      --mid:     #3D4466;
-      --muted:   #8891B0;
-      --surface: #F5F7FF;
-      --border:  rgba(24,71,240,0.1);
-      --white:   #FFFFFF;
-      --radius:  14px;
-      --shadow:  0 4px 24px rgba(24,71,240,0.08);
-    }
-
-    * { margin:0; padding:0; box-sizing:border-box; }
-
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background: var(--surface);
-      color: var(--dark);
-    }
-
-    /* ── HEADER ──────────────────────────── */
-    header {
-      background: var(--white);
-      border-bottom: 1px solid var(--border);
-      padding: 0 32px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 60px;
-      position: sticky;
-      top: 0;
-      z-index: 50;
-    }
-
-    .logo {
-      font-family: 'Syne', sans-serif;
-      font-weight: 800;
-      font-size: 18px;
-      color: var(--blue);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .logo-dot {
-      width: 7px; height: 7px;
-      background: var(--green);
-      border-radius: 50%;
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%,100% { opacity:1; transform:scale(1); }
-      50%      { opacity:0.5; transform:scale(1.5); }
-    }
-
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .hospital-badge {
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--blue);
-      background: var(--blue-lt);
-      padding: 5px 14px;
-      border-radius: 20px;
-      display: none;
-    }
-
-    .back-link {
-      font-size: 13px;
-      color: var(--muted);
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      transition: color 0.2s;
-    }
-
-    .back-link:hover { color: var(--blue); }
-
-    /* ── LAYOUT ──────────────────────────── */
-    .app { display: flex; min-height: calc(100vh - 60px); }
-
-    .sidebar {
-      width: 220px;
-      background: var(--white);
-      border-right: 1px solid var(--border);
-      padding: 24px 16px;
-      display: none;
-      flex-direction: column;
-      gap: 4px;
-      position: sticky;
-      top: 60px;
-      height: calc(100vh - 60px);
-    }
-
-    .sidebar.visible { display: flex; }
-
-    .sidebar-label {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--muted);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 0 12px;
-      margin: 16px 0 8px;
-    }
-
-    .sidebar-btn {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: none;
-      background: none;
-      cursor: pointer;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--mid);
-      width: 100%;
-      text-align: left;
-      transition: background 0.15s, color 0.15s;
-    }
-
-    .sidebar-btn:hover { background: var(--surface); color: var(--dark); }
-
-    .sidebar-btn.active {
-      background: var(--blue-lt);
-      color: var(--blue);
-    }
-
-    .sidebar-btn .icon { font-size: 16px; }
-
-    .main {
-      flex: 1;
-      padding: 32px;
-      max-width: 800px;
-    }
-
-    /* ── REGISTER / SELECT PAGE ──────────── */
-    #onboard-page {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: calc(100vh - 60px);
-      padding: 32px 16px;
-    }
-
-    .onboard-box {
-      width: 100%;
-      max-width: 520px;
-    }
-
-    .onboard-box h1 {
-      font-family: 'Syne', sans-serif;
-      font-size: 28px;
-      font-weight: 800;
-      margin-bottom: 8px;
-    }
-
-    .onboard-box .sub {
-      color: var(--muted);
-      font-size: 15px;
-      margin-bottom: 32px;
-    }
-
-    .tabs {
-      display: flex;
-      background: var(--surface);
-      border-radius: 12px;
-      padding: 4px;
-      margin-bottom: 24px;
-    }
-
-    .tab-btn {
-      flex: 1;
-      padding: 10px;
-      border: none;
-      background: none;
-      border-radius: 9px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--muted);
-      cursor: pointer;
-      transition: background 0.2s, color 0.2s;
-    }
-
-    .tab-btn.active {
-      background: var(--white);
-      color: var(--blue);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-
-    /* ── CARDS ───────────────────────────── */
-    .card {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 24px;
-      margin-bottom: 20px;
-    }
-
-    .card-title {
-      font-family: 'Syne', sans-serif;
-      font-size: 16px;
-      font-weight: 700;
-      margin-bottom: 20px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    /* ── FORM ELEMENTS ───────────────────── */
-    .form-group { margin-bottom: 16px; }
-
-    .form-group label {
-      display: block;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--mid);
-      margin-bottom: 6px;
-    }
-
-    input, select {
-      width: 100%;
-      padding: 10px 14px;
-      border: 1.5px solid rgba(24,71,240,0.12);
-      border-radius: 10px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 14px;
-      color: var(--dark);
-      background: var(--white);
-      transition: border-color 0.2s, box-shadow 0.2s;
-      outline: none;
-    }
-
-    input:focus, select:focus {
-      border-color: var(--blue);
-      box-shadow: 0 0 0 3px rgba(24,71,240,0.08);
-    }
-
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-
-    /* ── BUTTONS ─────────────────────────── */
-    .btn {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 10px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
-    .btn:active { transform: translateY(0); }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-
-    .btn-primary { background: var(--blue); color: white; }
-    .btn-green   { background: var(--green); color: white; }
-    .btn-outline {
-      background: white;
-      color: var(--blue);
-      border: 1.5px solid var(--blue);
-    }
-    .btn-ghost {
-      background: var(--surface);
-      color: var(--mid);
-    }
-    .btn-full { width: 100%; justify-content: center; }
-    .btn-sm   { padding: 7px 14px; font-size: 13px; }
-
-    /* ── ALERTS ──────────────────────────── */
-    .alert {
-      padding: 12px 16px;
-      border-radius: 10px;
-      font-size: 14px;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-    }
-
-    .alert-error   { background: var(--red-lt);   color: #B91C1C; border: 1px solid #FECACA; }
-    .alert-success { background: var(--green-lt); color: #065F46; border: 1px solid #A7F3D0; }
-    .alert-icon    { font-size: 16px; flex-shrink: 0; }
-
-    /* ── STATS ───────────────────────────── */
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .stat {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px;
-      text-align: center;
-    }
-
-    .stat .val {
-      font-family: 'Syne', sans-serif;
-      font-size: 32px;
-      font-weight: 800;
-      color: var(--blue);
-    }
-
-    .stat .lbl {
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 4px;
-      font-weight: 500;
-    }
-
-    /* ── DOCTOR LIST ─────────────────────── */
-    .doctor-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 16px;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      margin-bottom: 10px;
-      background: var(--white);
-      transition: border-color 0.2s;
-    }
-
-    .doctor-item:hover { border-color: rgba(24,71,240,0.25); }
-
-    .doctor-info { display: flex; align-items: center; gap: 12px; }
-
-    .doctor-avatar {
-      width: 40px; height: 40px;
-      background: var(--blue-lt);
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-    }
-
-    .doctor-name {
-      font-weight: 600;
-      font-size: 14px;
-      margin-bottom: 3px;
-    }
-
-    .doctor-meta {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .tag {
-      font-size: 12px;
-      padding: 2px 8px;
-      border-radius: 6px;
-      font-weight: 500;
-    }
-
-    .tag-blue  { background: var(--blue-lt); color: var(--blue); }
-    .tag-muted { background: var(--surface); color: var(--muted); }
-
-    /* ── QUEUE ───────────────────────────── */
-    .now-serving {
-      background: linear-gradient(135deg, var(--blue) 0%, #0E32C4 100%);
-      color: white;
-      border-radius: 20px;
-      padding: 32px;
-      text-align: center;
-      margin-bottom: 20px;
-    }
-
-    .now-serving .label {
-      font-size: 13px;
-      opacity: 0.7;
-      margin-bottom: 8px;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-
-    .now-serving .token-num {
-      font-family: 'Syne', sans-serif;
-      font-size: 72px;
-      font-weight: 800;
-      line-height: 1;
-      margin-bottom: 8px;
-    }
-
-    .now-serving .patient-name {
-      font-size: 16px;
-      opacity: 0.8;
-    }
-
-    .next-btn-wrap {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-
-    #next-btn {
-      padding: 14px 48px;
-      font-size: 16px;
-      background: var(--green);
-      color: white;
-      border: none;
-      border-radius: 12px;
-      font-family: 'Syne', sans-serif;
-      font-weight: 700;
-      cursor: pointer;
-      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
-      letter-spacing: 0.01em;
-    }
-
-    #next-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0,201,122,0.3);
-    }
-
-    #next-btn:disabled { opacity: 0.5; transform: none; cursor: not-allowed; }
-
-    /* ── QUEUE TABLE ─────────────────────── */
-    .queue-table-wrap {
-      border-radius: 12px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-    }
-
-    th {
-      background: var(--surface);
-      padding: 11px 16px;
-      text-align: left;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--muted);
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-
-    td {
-      padding: 13px 16px;
-      border-top: 1px solid var(--border);
-    }
-
-    tr:hover td { background: rgba(24,71,240,0.02); }
-
-    .badge {
-      padding: 3px 10px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-
-    .badge-emergency { background: var(--red-lt);   color: var(--red); }
-    .badge-normal    { background: var(--green-lt); color: #059669; }
-
-    .empty-state {
-      text-align: center;
-      padding: 48px 24px;
-      color: var(--muted);
-    }
-
-    .empty-state .emoji { font-size: 32px; margin-bottom: 12px; }
-    .empty-state p { font-size: 15px; }
-
-    /* ── LIVE INDICATOR ──────────────────── */
-    .live-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: #ECFDF5;
-      color: #065F46;
-      border: 1px solid #A7F3D0;
-      border-radius: 20px;
-      padding: 4px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      margin-bottom: 20px;
-    }
-
-    .live-dot {
-      width: 6px; height: 6px;
-      background: var(--green);
-      border-radius: 50%;
-      animation: pulse 1.5s infinite;
-    }
-
-    /* ── QR MODAL ────────────────────────── */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(10,15,30,0.6);
-      backdrop-filter: blur(4px);
-      z-index: 200;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .modal-overlay.show { display: flex; }
-
-    .modal {
-      background: var(--white);
-      border-radius: 24px;
-      padding: 36px;
-      width: 90%;
-      max-width: 340px;
-      text-align: center;
-      box-shadow: 0 32px 80px rgba(0,0,0,0.2);
-      animation: scaleIn 0.2s ease;
-    }
-
-    @keyframes scaleIn {
-      from { opacity:0; transform:scale(0.95); }
-      to   { opacity:1; transform:scale(1); }
-    }
-
-    .modal h3 {
-      font-family: 'Syne', sans-serif;
-      font-size: 18px;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-
-    .modal .dept {
-      color: var(--muted);
-      font-size: 14px;
-      margin-bottom: 20px;
-    }
-
-    .modal img {
-      width: 200px; height: 200px;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      margin-bottom: 16px;
-    }
-
-    .modal .hint {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 24px;
-    }
-
-    .modal-actions {
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-    }
-
-    /* ── PAGE SECTIONS ───────────────────── */
-    .page { display: none; }
-    .page.active { display: block; }
-
-    @media (max-width: 640px) {
-      .main { padding: 20px 16px; }
-      .stats { grid-template-columns: repeat(2, 1fr); }
-      .grid-2 { grid-template-columns: 1fr; }
-    }
+    :root{
+      --primary:#2563EB;--primary-lt:rgba(37,99,235,0.08);
+      --success:#00C97A;--success-lt:rgba(0,201,122,0.08);
+      --warning:#F59E0B;--warning-lt:rgba(245,158,11,0.08);
+      --danger:#F03B3B;--danger-lt:rgba(240,59,59,0.07);
+      --bg:#F0F4FF;--ink:#0F172A;--mid:#334155;--muted:#64748B;
+      --surface:#FFFFFF;--border:rgba(37,99,235,0.1);
+      --shadow:0 4px 16px rgba(37,99,235,0.07);--radius:16px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+
+    /* ── HEADER ── */
+    header{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:0 24px;height:60px;
+      background:var(--surface);border-bottom:1px solid var(--border);
+      flex-shrink:0;
+    }
+    .h-logo{display:flex;align-items:center;gap:10px;}
+    .h-icon{width:34px;height:34px;background:var(--primary);border-radius:9px;display:flex;align-items:center;justify-content:center;color:white;font-weight:900;font-size:17px;}
+    .h-title{font-size:16px;font-weight:800;color:var(--ink);letter-spacing:-0.3px;}
+    .h-right{display:flex;align-items:center;gap:12px;}
+    .h-hospital{font-size:13px;font-weight:700;color:var(--primary);background:var(--primary-lt);padding:5px 12px;border-radius:20px;display:none;}
+    .live-pill{display:flex;align-items:center;gap:5px;background:var(--success-lt);border:1px solid rgba(0,201,122,0.2);border-radius:20px;padding:4px 10px;}
+    .live-dot{width:6px;height:6px;background:var(--success);border-radius:50%;animation:pulse 1.8s infinite;}
+    .live-pill span{font-size:11px;font-weight:700;color:var(--success);}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(1.5);}}
+    .back-btn{font-size:12px;color:var(--muted);text-decoration:none;display:flex;align-items:center;gap:4px;transition:color 0.2s;}
+    .back-btn:hover{color:var(--primary);}
+
+    /* ── APP SHELL ── */
+    .app{display:flex;flex:1;overflow:hidden;}
+
+    /* ── SIDEBAR ── */
+    .sidebar{
+      width:220px;background:var(--surface);
+      border-right:1px solid var(--border);
+      padding:20px 12px;display:flex;flex-direction:column;gap:2px;
+      overflow-y:auto;flex-shrink:0;
+    }
+    .s-label{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;padding:0 10px;margin:14px 0 6px;}
+    .s-label:first-child{margin-top:0;}
+    .s-btn{
+      display:flex;align-items:center;gap:10px;
+      padding:10px;border-radius:10px;border:none;
+      background:none;cursor:pointer;width:100%;text-align:left;
+      font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;
+      color:var(--muted);transition:background 0.15s,color 0.15s;
+    }
+    .s-btn:hover{background:var(--bg);color:var(--ink);}
+    .s-btn.active{background:var(--primary-lt);color:var(--primary);}
+    .s-btn .ico{font-size:16px;width:20px;text-align:center;}
+
+    /* ── MAIN ── */
+    .main{flex:1;overflow-y:auto;padding:24px;}
+
+    /* ── ONBOARD ── */
+    #onboard{
+      display:flex;align-items:center;justify-content:center;
+      height:100%;padding:24px;
+    }
+    .onboard-box{width:100%;max-width:480px;}
+    .onboard-box h1{font-size:26px;font-weight:900;letter-spacing:-0.8px;margin-bottom:6px;}
+    .onboard-box .sub{font-size:14px;color:var(--muted);margin-bottom:28px;}
+    .tabs{display:flex;background:var(--bg);border-radius:12px;padding:4px;margin-bottom:20px;}
+    .tab{flex:1;padding:10px;border:none;background:none;border-radius:9px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:background 0.2s,color 0.2s;}
+    .tab.active{background:var(--surface);color:var(--primary);box-shadow:0 2px 8px rgba(0,0,0,0.07);}
+
+    /* ── CARDS ── */
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;}
+    .card-title{font-size:15px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px;letter-spacing:-0.2px;}
+    .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+
+    /* ── FORMS ── */
+    .fg{margin-bottom:14px;}
+    .fg label{display:block;font-size:12px;font-weight:700;color:var(--mid);margin-bottom:6px;}
+    .fg input,.fg select{
+      width:100%;padding:10px 13px;
+      border:1.5px solid rgba(37,99,235,0.12);border-radius:10px;
+      font-family:'DM Sans',sans-serif;font-size:13px;color:var(--ink);
+      background:var(--surface);outline:none;transition:border-color 0.2s,box-shadow 0.2s;
+    }
+    .fg input:focus,.fg select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-lt);}
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+    /* ── BUTTONS ── */
+    .btn{
+      padding:10px 18px;border:none;border-radius:10px;
+      font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;
+      cursor:pointer;transition:transform 0.15s,box-shadow 0.15s,opacity 0.15s;
+      display:inline-flex;align-items:center;gap:6px;
+    }
+    .btn:hover{transform:translateY(-1px);}
+    .btn:disabled{opacity:0.5;cursor:not-allowed;transform:none;}
+    .btn-primary{background:var(--primary);color:white;}
+    .btn-primary:hover{box-shadow:0 6px 16px rgba(37,99,235,0.3);}
+    .btn-success{background:var(--success);color:white;}
+    .btn-success:hover{box-shadow:0 6px 16px rgba(0,201,122,0.3);}
+    .btn-outline{background:white;color:var(--primary);border:1.5px solid var(--primary);}
+    .btn-ghost{background:var(--bg);color:var(--muted);}
+    .btn-full{width:100%;justify-content:center;}
+    .btn-sm{padding:7px 13px;font-size:12px;}
+
+    /* ── ALERTS ── */
+    .alert{padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:12px;display:flex;align-items:flex-start;gap:8px;}
+    .alert-error{background:var(--danger-lt);color:#B91C1C;border:1px solid rgba(240,59,59,0.2);}
+    .alert-success{background:var(--success-lt);color:#065F46;border:1px solid rgba(0,201,122,0.2);}
+
+    /* ── STATS ── */
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;}
+    .stat .v{font-size:28px;font-weight:900;color:var(--primary);letter-spacing:-1px;}
+    .stat .l{font-size:11px;color:var(--muted);font-weight:600;margin-top:3px;}
+
+    /* ── DOCTOR ITEMS ── */
+    .doc-item{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:12px 14px;border:1px solid var(--border);border-radius:12px;
+      margin-bottom:8px;transition:border-color 0.2s;
+    }
+    .doc-item:hover{border-color:rgba(37,99,235,0.25);}
+    .doc-avatar{width:38px;height:38px;background:var(--primary-lt);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;margin-right:10px;flex-shrink:0;}
+    .doc-name{font-weight:700;font-size:13px;margin-bottom:2px;}
+    .doc-meta{display:flex;gap:6px;align-items:center;}
+    .tag{font-size:11px;padding:2px 8px;border-radius:6px;font-weight:600;}
+    .tag-blue{background:var(--primary-lt);color:var(--primary);}
+    .tag-gray{background:var(--bg);color:var(--muted);}
+
+    /* ── NOW SERVING ── */
+    .now-serving{
+      background:linear-gradient(135deg,var(--primary) 0%,#1d4ed8 100%);
+      color:white;border-radius:20px;padding:28px;text-align:center;
+      margin-bottom:16px;
+      box-shadow:0 10px 32px rgba(37,99,235,0.25);
+    }
+    .ns-label{font-size:11px;font-weight:700;opacity:0.65;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;}
+    .ns-token{font-size:68px;font-weight:900;line-height:1;letter-spacing:-3px;margin-bottom:6px;}
+    .ns-name{font-size:15px;opacity:0.75;font-weight:500;}
+
+    .next-btn{
+      width:100%;padding:14px;border:none;border-radius:12px;
+      background:var(--ink);color:white;font-family:'DM Sans',sans-serif;
+      font-size:15px;font-weight:800;cursor:pointer;
+      transition:transform 0.15s,box-shadow 0.15s,opacity 0.15s;
+      margin-bottom:16px;
+    }
+    .next-btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(15,23,42,0.2);}
+    .next-btn:disabled{opacity:0.5;transform:none;cursor:not-allowed;}
+
+    /* ── QUEUE TABLE ── */
+    .queue-wrap{border-radius:12px;overflow:hidden;border:1px solid var(--border);}
+    table{width:100%;border-collapse:collapse;font-size:13px;}
+    th{background:var(--bg);padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:0.05em;text-transform:uppercase;}
+    td{padding:11px 14px;border-top:1px solid var(--border);}
+    tr:hover td{background:rgba(37,99,235,0.02);}
+    .badge{padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;}
+    .badge-em{background:var(--danger-lt);color:var(--danger);}
+    .badge-no{background:var(--success-lt);color:#059669;}
+
+    /* ── EMPTY STATE ── */
+    .empty{text-align:center;padding:40px 20px;color:var(--muted);}
+    .empty .e-ico{font-size:28px;margin-bottom:10px;}
+    .empty p{font-size:14px;}
+
+    /* ── QR MODAL ── */
+    .overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center;}
+    .overlay.show{display:flex;}
+    .modal{background:var(--surface);border-radius:24px;padding:32px;width:90%;max-width:320px;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,0.2);}
+    .modal h3{font-size:17px;font-weight:800;margin-bottom:4px;}
+    .modal .m-sub{font-size:13px;color:var(--muted);margin-bottom:18px;}
+    #qr-render{display:flex;justify-content:center;margin-bottom:16px;padding:16px;background:var(--bg);border-radius:12px;}
+    .modal .hint{font-size:12px;color:var(--muted);margin-bottom:20px;}
+    .m-btns{display:flex;gap:10px;justify-content:center;}
+
+    /* ── TOAST ── */
+    #toast{
+      position:fixed;bottom:24px;right:24px;
+      background:var(--ink);color:white;
+      padding:12px 20px;border-radius:12px;
+      font-size:13px;font-weight:600;
+      box-shadow:0 12px 32px rgba(0,0,0,0.2);
+      transform:translateY(80px);opacity:0;
+      transition:0.3s cubic-bezier(0.175,0.885,0.32,1.275);
+      z-index:500;
+    }
+    #toast.show{transform:translateY(0);opacity:1;}
+
+    .page{display:none;}
+    .page.active{display:block;}
+    #dashboard{display:none;}
   </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">
-    <div class="logo-dot"></div>
-    MediQueue
+  <div class="h-logo">
+    <div class="h-icon">+</div>
+    <span class="h-title">MediQueue</span>
   </div>
-  <div class="header-right">
-    <span class="hospital-badge" id="hospital-badge">🏥 <span id="h-name"></span></span>
-    <a href="/" class="back-link">← Home</a>
+  <div class="h-right">
+    <div class="live-pill"><div class="live-dot"></div><span>Live</span></div>
+    <span class="h-hospital" id="h-name-badge"></span>
+    <a href="/" class="back-btn">← Home</a>
   </div>
 </header>
 
 <div class="app">
-  <!-- Sidebar (shown after hospital selected) -->
-  <div class="sidebar" id="sidebar">
-    <div class="sidebar-label">Manage</div>
-    <button class="sidebar-btn active" onclick="switchPage('doctors-page', this)">
-      <span class="icon">👨‍⚕️</span> Doctors
-    </button>
-    <button class="sidebar-btn" onclick="switchPage('queue-page', this)">
-      <span class="icon">🔢</span> Queue
-    </button>
+
+  <!-- Sidebar (hidden until hospital selected) -->
+  <div class="sidebar" id="sidebar" style="display:none;">
+    <div class="s-label">Manage</div>
+    <button class="s-btn active" onclick="showPage('p-queue',this)"><span class="ico">🔢</span>Live Queue</button>
+    <button class="s-btn" onclick="showPage('p-doctors',this)"><span class="ico">👨‍⚕️</span>Doctors</button>
+    <div class="s-label">Hospital</div>
+    <button class="s-btn" onclick="showPage('p-info',this)"><span class="ico">🏥</span>Info</button>
+    <button class="s-btn" onclick="changeHospital()" style="margin-top:auto;color:var(--danger);"><span class="ico">🔄</span>Change Hospital</button>
   </div>
 
-  <!-- Onboarding -->
-  <div id="onboard-page">
-    <div class="onboard-box">
-      <h1>Hospital Portal</h1>
-      <p class="sub">Register your hospital or access your existing dashboard</p>
+  <div class="main">
 
-      <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('register')">Register New</button>
-        <button class="tab-btn" onclick="switchTab('existing')">Existing Hospital</button>
-      </div>
+    <!-- ── ONBOARD ── -->
+    <div id="onboard">
+      <div class="onboard-box">
+        <h1>Hospital Portal</h1>
+        <p class="sub">Register your hospital or access your existing dashboard</p>
 
-      <!-- Register form -->
-      <div id="tab-register">
-        <div class="card">
-          <div class="card-title">🏥 Register Hospital</div>
-          <div id="reg-error" class="alert alert-error" style="display:none;">
-            <span class="alert-icon">⚠️</span><span id="reg-error-msg"></span>
-          </div>
-          <div id="reg-success" class="alert alert-success" style="display:none;">
-            <span class="alert-icon">✅</span><span id="reg-success-msg"></span>
-          </div>
-          <div class="form-group">
-            <label>Hospital Name</label>
-            <input type="text" id="reg-name" placeholder="e.g. City General Hospital"/>
-          </div>
-          <div class="form-group">
-            <label>Address</label>
-            <input type="text" id="reg-address" placeholder="Full address"/>
-          </div>
-          <div class="form-group">
-            <label>Departments <span style="color:var(--muted);font-weight:400;">(comma separated)</span></label>
-            <input type="text" id="reg-depts" placeholder="Cardiology, Orthopedics, General"/>
-          </div>
-          <div class="grid-2">
-            <div class="form-group">
-              <label>Contact Email</label>
-              <input type="email" id="reg-email" placeholder="hospital@email.com"/>
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('t-reg',this)">Register New</button>
+          <button class="tab" onclick="switchTab('t-sel',this)">Existing Hospital</button>
+        </div>
+
+        <!-- Register tab -->
+        <div id="t-reg">
+          <div class="card">
+            <div class="card-title">🏥 Register Hospital</div>
+            <div id="reg-err" class="alert alert-error" style="display:none;"><span id="reg-err-msg"></span></div>
+            <div id="reg-ok"  class="alert alert-success" style="display:none;"><span id="reg-ok-msg"></span></div>
+            <div class="fg"><label>Hospital Name *</label><input id="r-name" placeholder="e.g. Apollo Clinic"/></div>
+            <div class="fg"><label>Address *</label><input id="r-addr" placeholder="e.g. Koramangala, Bengaluru"/></div>
+            <div class="fg"><label>Departments <span style="font-weight:400;color:var(--muted);">(comma separated)</span></label><input id="r-depts" placeholder="Cardiology, General, Orthopedics"/></div>
+            <div class="g2">
+              <div class="fg"><label>Contact Email *</label><input id="r-email" type="email" placeholder="hospital@email.com"/></div>
+              <div class="fg"><label>Phone *</label><input id="r-phone" type="tel" placeholder="+91 XXXXX XXXXX"/></div>
             </div>
-            <div class="form-group">
-              <label>Phone</label>
-              <input type="tel" id="reg-phone" placeholder="+91 XXXXX XXXXX"/>
+            <button class="btn btn-primary btn-full" onclick="registerHospital()">Register Hospital →</button>
+          </div>
+        </div>
+
+        <!-- Select tab -->
+        <div id="t-sel" style="display:none;">
+          <div class="card">
+            <div class="card-title">🔍 Select Your Hospital</div>
+            <div class="fg"><label>Hospital</label>
+              <select id="h-select"><option value="">Loading...</option></select>
+            </div>
+            <button class="btn btn-primary btn-full" onclick="selectHospital()">Open Dashboard →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── DASHBOARD ── -->
+    <div id="dashboard">
+
+      <!-- Live Queue page -->
+      <div id="p-queue" class="page active">
+        <div style="display:flex;gap:20px;align-items:flex-start;">
+
+          <!-- Queue list (left) -->
+          <div style="flex:1;">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title" style="margin:0;">🪑 Waiting Queue</div>
+                <span id="q-count" style="font-size:12px;color:var(--muted);font-weight:600;"></span>
+              </div>
+              <div class="fg" style="margin-bottom:0;">
+                <label>Select Doctor</label>
+                <div style="display:flex;gap:8px;">
+                  <select id="q-doc-sel" style="flex:1;padding:10px 12px;border:1.5px solid rgba(37,99,235,0.12);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;"></select>
+                  <button class="btn btn-primary btn-sm" onclick="loadQueue()">Load</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="q-empty" class="empty"><div class="e-ico">🪑</div><p>Select a doctor to view queue</p></div>
+            <div class="queue-wrap" id="q-table" style="display:none;">
+              <table>
+                <thead><tr><th>#</th><th>Token</th><th>Patient</th><th>Type</th><th>Wait</th></tr></thead>
+                <tbody id="q-body"></tbody>
+              </table>
             </div>
           </div>
-          <button class="btn btn-primary btn-full" onclick="registerHospital()">
-            Register Hospital →
-          </button>
+
+          <!-- Action panel (right) -->
+          <div style="width:260px;flex-shrink:0;">
+            <div class="now-serving">
+              <div class="ns-label">Now Serving</div>
+              <div class="ns-token" id="ns-token">--</div>
+              <div class="ns-name"  id="ns-name">No patient yet</div>
+            </div>
+            <button class="next-btn" id="next-btn" onclick="nextPatient()">Call Next Patient →</button>
+
+            <!-- QR Card -->
+            <div class="card" style="text-align:center;">
+              <div class="card-title" style="justify-content:center;">📷 Cabin QR Code</div>
+              <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">Patients scan this to book</p>
+              <div id="qr-inline" style="display:flex;justify-content:center;margin-bottom:14px;padding:16px;background:var(--bg);border-radius:12px;"></div>
+              <button class="btn btn-ghost btn-sm btn-full" onclick="printQR()">🖨️ Print for Desk</button>
+            </div>
+          </div>
+
         </div>
       </div>
 
-      <!-- Select existing -->
-      <div id="tab-existing" style="display:none;">
+      <!-- Doctors page -->
+      <div id="p-doctors" class="page">
+        <div class="stats" id="doc-stats">
+          <div class="stat"><div class="v" id="st-docs">0</div><div class="l">Doctors</div></div>
+          <div class="stat"><div class="v" id="st-wait">0</div><div class="l">Waiting Now</div></div>
+          <div class="stat"><div class="v" id="st-depts">0</div><div class="l">Departments</div></div>
+        </div>
+
         <div class="card">
-          <div class="card-title">🔍 Select Your Hospital</div>
-          <div class="form-group">
-            <label>Hospital</label>
-            <select id="hospital-select">
-              <option value="">-- Select hospital --</option>
-            </select>
+          <div class="card-title">➕ Add Doctor</div>
+          <div id="doc-err" class="alert alert-error" style="display:none;"><span id="doc-err-msg"></span></div>
+          <div id="doc-ok"  class="alert alert-success" style="display:none;"><span id="doc-ok-msg"></span></div>
+          <div class="g2">
+            <div class="fg"><label>Doctor Name</label><input id="d-name" placeholder="e.g. Dr. Sharma"/></div>
+            <div class="fg"><label>Department</label><input id="d-dept" placeholder="e.g. Cardiology"/></div>
           </div>
-          <button class="btn btn-primary btn-full" onclick="selectHospital()">
-            Open Dashboard →
-          </button>
+          <div class="fg"><label>Avg. Consultation Time (minutes)</label><input id="d-time" type="number" value="10" min="1" max="60"/></div>
+          <button class="btn btn-primary" onclick="addDoctor()">+ Add Doctor</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">👨‍⚕️ Your Doctors</div>
+          <div id="doc-list"><div class="empty"><div class="e-ico">🩺</div><p>No doctors added yet</p></div></div>
         </div>
       </div>
+
+      <!-- Info page -->
+      <div id="p-info" class="page">
+        <div class="card">
+          <div class="card-title">🏥 Hospital Information</div>
+          <div id="info-content"><div class="empty"><div class="e-ico">🏥</div><p>Loading...</p></div></div>
+        </div>
+      </div>
+
     </div>
-  </div>
-
-  <!-- Dashboard main -->
-  <div class="main" id="dashboard-main" style="display:none;">
-
-    <!-- Doctors page -->
-    <div id="doctors-page" class="page active">
-      <div class="stats">
-        <div class="stat">
-          <div class="val" id="stat-doctors">0</div>
-          <div class="lbl">Doctors</div>
-        </div>
-        <div class="stat">
-          <div class="val" id="stat-waiting">0</div>
-          <div class="lbl">Waiting</div>
-        </div>
-        <div class="stat">
-          <div class="val" id="stat-depts">0</div>
-          <div class="lbl">Departments</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">➕ Add Doctor</div>
-        <div id="doctor-error" class="alert alert-error" style="display:none;">
-          <span class="alert-icon">⚠️</span><span id="doctor-error-msg"></span>
-        </div>
-        <div id="doctor-success" class="alert alert-success" style="display:none;">
-          <span class="alert-icon">✅</span><span id="doctor-success-msg"></span>
-        </div>
-        <div class="grid-2">
-          <div class="form-group">
-            <label>Doctor Name</label>
-            <input type="text" id="doctor-name" placeholder="e.g. Dr. Sharma"/>
-          </div>
-          <div class="form-group">
-            <label>Department</label>
-            <input type="text" id="doctor-dept" placeholder="e.g. Cardiology"/>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Avg. Consultation Time (minutes)</label>
-          <input type="number" id="doctor-time" value="10" min="1" max="60"/>
-        </div>
-        <button class="btn btn-primary" onclick="addDoctor()">Add Doctor</button>
-      </div>
-
-      <div class="card">
-        <div class="card-title">👨‍⚕️ Your Doctors</div>
-        <div id="doctors-list">
-          <div class="empty-state">
-            <div class="emoji">🩺</div>
-            <p>No doctors added yet</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Queue page -->
-    <div id="queue-page" class="page">
-      <div class="card" style="margin-bottom:20px;">
-        <div class="card-title">🔢 Select Doctor</div>
-        <div style="display:flex;gap:10px;align-items:flex-end;">
-          <div style="flex:1;" class="form-group" style="margin:0;">
-            <select id="queue-doctor-select">
-              <option value="">-- Select a doctor --</option>
-            </select>
-          </div>
-          <button class="btn btn-primary" onclick="loadQueue()" style="flex-shrink:0;">
-            Load Queue
-          </button>
-        </div>
-      </div>
-
-      <div class="live-pill">
-        <div class="live-dot"></div>
-        Live updates enabled
-      </div>
-
-      <div class="now-serving">
-        <div class="label">Now Serving</div>
-        <div class="token-num" id="current-token">--</div>
-        <div class="patient-name" id="current-patient">No patient yet</div>
-      </div>
-
-      <div class="next-btn-wrap">
-        <button id="next-btn" onclick="nextPatient()">Next Patient →</button>
-      </div>
-
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <div class="card-title" style="margin:0;">Waiting Queue</div>
-          <span id="waiting-count" style="font-size:13px;color:var(--muted);"></span>
-        </div>
-        <div id="queue-empty" class="empty-state">
-          <div class="emoji">🪑</div>
-          <p>Select a doctor to view queue</p>
-        </div>
-        <div class="queue-table-wrap" id="queue-table-wrap" style="display:none;">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Token</th>
-                <th>Patient</th>
-                <th>Type</th>
-                <th>Wait</th>
-              </tr>
-            </thead>
-            <tbody id="queue-body"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
   </div>
 </div>
 
 <!-- QR Modal -->
-<div class="modal-overlay" id="qr-modal">
+<div class="overlay" id="qr-modal">
   <div class="modal">
-    <h3 id="qr-doctor-name"></h3>
-    <p class="dept" id="qr-dept"></p>
-    <img id="qr-img" src="" alt="QR Code"/>
+    <h3 id="m-doc-name"></h3>
+    <p class="m-sub" id="m-dept"></p>
+    <div id="qr-render"></div>
     <p class="hint">📷 Print and place outside the cabin door</p>
-    <div class="modal-actions">
+    <div class="m-btns">
       <button class="btn btn-primary btn-sm" onclick="printQR()">🖨️ Print</button>
-      <button class="btn btn-ghost btn-sm" onclick="closeQR()">Close</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Close</button>
     </div>
   </div>
 </div>
 
-<script>
-  const BASE = 'http://localhost:5000';
-  let currentHospitalId   = null;
-  let currentHospitalName = '';
-  let currentDoctorId     = null;
-  let socket              = null;
-  let allDoctors          = [];
+<div id="toast"></div>
 
-  // ── Init ───────────────────────────────────────────
+<script>
+  const API = 'http://localhost:5000/api';
+  let hospitalId = null, hospitalName = '', socket = null, qrInstance = null;
+  let currentDoctorId = null, allDoctors = [];
+
+  // ── INIT ──────────────────────────────────────────
   window.onload = () => loadHospitalList();
 
   async function loadHospitalList() {
     try {
-      const res      = await fetch(`${BASE}/api/hospitals`);
-      const hospitals = await res.json();
-      const sel      = document.getElementById('hospital-select');
-      hospitals.forEach(h => {
-        sel.innerHTML += `<option value="${h._id}">${h.name}</option>`;
-      });
-    } catch (err) { console.error(err); }
-  }
-
-  // ── Tabs ───────────────────────────────────────────
-  function switchTab(tab) {
-    document.getElementById('tab-register').style.display =
-      tab === 'register' ? 'block' : 'none';
-    document.getElementById('tab-existing').style.display =
-      tab === 'existing' ? 'block' : 'none';
-    document.querySelectorAll('.tab-btn').forEach((b, i) => {
-      b.classList.toggle('active', (i === 0) === (tab === 'register'));
-    });
-  }
-
-  // ── Register ───────────────────────────────────────
-  async function registerHospital() {
-    const name    = document.getElementById('reg-name').value.trim();
-    const address = document.getElementById('reg-address').value.trim();
-    const depts   = document.getElementById('reg-depts').value
-      .split(',').map(d => d.trim()).filter(Boolean);
-    const email   = document.getElementById('reg-email').value.trim();
-    const phone   = document.getElementById('reg-phone').value.trim();
-
-    hideAlert('reg-error'); hideAlert('reg-success');
-
-    if (!name || !address || !email || !phone) {
-      showAlert('reg-error', 'All fields are required');
-      return;
-    }
-
-    try {
-      const res  = await fetch(`${BASE}/api/hospitals`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, address, departments: depts })
-      });
-      const data = await res.json();
-      if (!res.ok) { showAlert('reg-error', data.message); return; }
-
-      showAlert('reg-success', 'Hospital registered! Opening dashboard...');
-      currentHospitalId   = data._id;
-      currentHospitalName = data.name;
-      setTimeout(openDashboard, 1500);
-    } catch (err) {
-      showAlert('reg-error', 'Server error. Is backend running?');
-    }
-  }
-
-  // ── Select existing ────────────────────────────────
-  async function selectHospital() {
-    const id = document.getElementById('hospital-select').value;
-    if (!id) return alert('Please select a hospital');
-    try {
-      const res  = await fetch(`${BASE}/api/hospitals`);
+      const res = await fetch(`${API}/hospitals`);
       const list = await res.json();
-      const h    = list.find(x => x._id === id);
-      currentHospitalId   = id;
-      currentHospitalName = h?.name || 'Hospital';
-      openDashboard();
-    } catch (err) { alert('Failed to load hospital'); }
+      const sel = document.getElementById('h-select');
+      if (!list.length) { sel.innerHTML = '<option value="">No hospitals yet — register one</option>'; return; }
+      sel.innerHTML = '<option value="">-- Select hospital --</option>';
+      list.forEach(h => sel.innerHTML += `<option value="${h._id}">${h.name}</option>`);
+    } catch(e) { console.error(e); }
   }
 
-  // ── Open dashboard ─────────────────────────────────
+  // ── TABS ──────────────────────────────────────────
+  function switchTab(id, btn) {
+    ['t-reg','t-sel'].forEach(t => document.getElementById(t).style.display = 'none');
+    document.getElementById(id).style.display = 'block';
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  // ── REGISTER ─────────────────────────────────────
+  async function registerHospital() {
+    const name  = document.getElementById('r-name').value.trim();
+    const addr  = document.getElementById('r-addr').value.trim();
+    const depts = document.getElementById('r-depts').value.split(',').map(d=>d.trim()).filter(Boolean);
+    const email = document.getElementById('r-email').value.trim();
+    const phone = document.getElementById('r-phone').value.trim();
+    hideA('reg-err'); hideA('reg-ok');
+    if (!name || !addr || !email || !phone) { showA('reg-err','All fields are required'); return; }
+    try {
+      const res = await fetch(`${API}/hospitals`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,address:addr,departments:depts})});
+      const data = await res.json();
+      if (!res.ok) { showA('reg-err',data.message); return; }
+      showA('reg-ok','Hospital registered! Opening dashboard...');
+      hospitalId = data._id; hospitalName = data.name;
+      setTimeout(openDashboard, 1400);
+    } catch(e) { showA('reg-err','Server error. Is backend running?'); }
+  }
+
+  // ── SELECT EXISTING ───────────────────────────────
+  async function selectHospital() {
+    const id = document.getElementById('h-select').value;
+    if (!id) { alert('Please select a hospital'); return; }
+    try {
+      const res = await fetch(`${API}/hospitals`);
+      const list = await res.json();
+      const h = list.find(x => x._id === id);
+      hospitalId = id; hospitalName = h?.name || 'Hospital';
+      openDashboard();
+    } catch(e) { alert('Failed to load hospital'); }
+  }
+
+  function changeHospital() {
+    hospitalId = null; hospitalName = '';
+    document.getElementById('onboard').style.display = 'flex';
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('sidebar').style.display = 'none';
+    document.getElementById('h-name-badge').style.display = 'none';
+    if (socket) socket.disconnect();
+  }
+
+  // ── OPEN DASHBOARD ────────────────────────────────
   function openDashboard() {
-    document.getElementById('onboard-page').style.display   = 'none';
-    document.getElementById('dashboard-main').style.display = 'block';
-    document.getElementById('sidebar').classList.add('visible');
-    document.getElementById('hospital-badge').style.display = 'inline-flex';
-    document.getElementById('h-name').textContent = currentHospitalName;
+    document.getElementById('onboard').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('sidebar').style.display = 'flex';
+    document.getElementById('h-name-badge').textContent = hospitalName;
+    document.getElementById('h-name-badge').style.display = 'inline-block';
     initSocket();
     loadDoctors();
+    loadHospitalInfo();
   }
 
-  // ── Page switching ─────────────────────────────────
-  function switchPage(pageId, btn) {
+  // ── PAGE SWITCHING ────────────────────────────────
+  function showPage(id, btn) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(pageId).classList.add('active');
-    document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.s-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    if (pageId === 'doctors-page') loadDoctors();
+    if (id === 'p-doctors') loadDoctors();
+    if (id === 'p-info')    loadHospitalInfo();
   }
 
-  // ── Socket ─────────────────────────────────────────
+  // ── SOCKET ────────────────────────────────────────
   function initSocket() {
-    socket = io(BASE);
+    socket = io('http://localhost:5000');
     socket.on('connect', () => console.log('Socket connected'));
   }
 
-  function subscribeToQueue(doctorId) {
-    if (currentDoctorId) {
-      socket.emit('leaveQueue', currentDoctorId);
-      socket.off(`queue:${currentDoctorId}`);
-    }
+  function subscribeQueue(doctorId) {
+    if (currentDoctorId) { socket.emit('leaveQueue',currentDoctorId); socket.off(`queue:${currentDoctorId}`); }
     socket.emit('joinQueue', doctorId);
     socket.on(`queue:${doctorId}`, data => {
-      if (data.type === 'NEXT_PATIENT') {
-        setToken(data.currentToken, data.currentPatient);
-        renderQueue(data.queue);
-        setCount(data.waitingCount);
-      }
-      if (data.type === 'QUEUE_EMPTY') {
-        setToken(null, 'No more patients');
-        renderQueue([]);
-        setCount(0);
-      }
+      if (data.type === 'NEXT_PATIENT') { setToken(data.currentToken,data.currentPatient); renderQueue(data.queue); setCount(data.waitingCount); }
+      if (data.type === 'QUEUE_EMPTY')  { setToken(null,'No more patients'); renderQueue([]); setCount(0); }
       if (data.type === 'NEW_APPOINTMENT') loadQueue();
     });
   }
 
-  // ── Doctors ────────────────────────────────────────
+  // ── DOCTORS ───────────────────────────────────────
   async function loadDoctors() {
-    if (!currentHospitalId) return;
+    if (!hospitalId) return;
     try {
-      const res = await fetch(`${BASE}/api/doctors?hospitalId=${currentHospitalId}`);
+      const res = await fetch(`${API}/doctors?hospitalId=${hospitalId}`);
       allDoctors = await res.json();
       renderDoctors(allDoctors);
-      populateQueueSelect(allDoctors);
-      document.getElementById('stat-doctors').textContent = allDoctors.length;
-      const depts = [...new Set(allDoctors.map(d => d.department))];
-      document.getElementById('stat-depts').textContent  = depts.length;
-    } catch (err) { console.error(err); }
+      populateQueueSel(allDoctors);
+      document.getElementById('st-docs').textContent  = allDoctors.length;
+      document.getElementById('st-depts').textContent = [...new Set(allDoctors.map(d=>d.department))].length;
+    } catch(e) { console.error(e); }
   }
 
-  function renderDoctors(doctors) {
-    const el = document.getElementById('doctors-list');
-    if (!doctors.length) {
-      el.innerHTML = `<div class="empty-state">
-        <div class="emoji">🩺</div><p>No doctors added yet</p></div>`;
-      return;
-    }
-    el.innerHTML = doctors.map(d => `
-      <div class="doctor-item">
-        <div class="doctor-info">
-          <div class="doctor-avatar">👨‍⚕️</div>
+  function renderDoctors(docs) {
+    const el = document.getElementById('doc-list');
+    if (!docs.length) { el.innerHTML = '<div class="empty"><div class="e-ico">🩺</div><p>No doctors added yet</p></div>'; return; }
+    el.innerHTML = docs.map(d => `
+      <div class="doc-item">
+        <div style="display:flex;align-items:center;">
+          <div class="doc-avatar">👨‍⚕️</div>
           <div>
-            <div class="doctor-name">${d.name}</div>
-            <div class="doctor-meta">
+            <div class="doc-name">${d.name}</div>
+            <div class="doc-meta">
               <span class="tag tag-blue">${d.department}</span>
-              <span class="tag tag-muted">~${d.avgConsultationTime} min</span>
+              <span class="tag tag-gray">~${d.avgConsultationTime} min</span>
             </div>
           </div>
         </div>
-        <button class="btn btn-outline btn-sm" onclick="showQR('${d._id}')">
-          📷 QR Code
-        </button>
+        <button class="btn btn-outline btn-sm" onclick="showQRModal('${d._id}','${d.name}','${d.department}')">📷 QR</button>
       </div>
     `).join('');
   }
 
-  function populateQueueSelect(doctors) {
-    const sel = document.getElementById('queue-doctor-select');
-    sel.innerHTML = '<option value="">-- Select a doctor --</option>';
-    doctors.forEach(d => {
-      sel.innerHTML += `<option value="${d._id}">${d.name} — ${d.department}</option>`;
-    });
+  function populateQueueSel(docs) {
+    const sel = document.getElementById('q-doc-sel');
+    sel.innerHTML = '<option value="">-- Select doctor --</option>';
+    docs.forEach(d => sel.innerHTML += `<option value="${d._id}">${d.name} — ${d.department}</option>`);
   }
 
   async function addDoctor() {
-    const name = document.getElementById('doctor-name').value.trim();
-    const dept = document.getElementById('doctor-dept').value.trim();
-    const time = document.getElementById('doctor-time').value;
-
-    hideAlert('doctor-error'); hideAlert('doctor-success');
-
-    if (!name || !dept) {
-      showAlert('doctor-error', 'Name and department are required');
-      return;
-    }
-
+    const name = document.getElementById('d-name').value.trim();
+    const dept = document.getElementById('d-dept').value.trim();
+    const time = document.getElementById('d-time').value;
+    hideA('doc-err'); hideA('doc-ok');
+    if (!name || !dept) { showA('doc-err','Name and department are required'); return; }
     try {
-      const res = await fetch(`${BASE}/api/doctors`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name, hospital: currentHospitalId,
-          department: dept,
-          avgConsultationTime: parseInt(time) || 10
-        })
-      });
+      const res = await fetch(`${API}/doctors`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,hospital:hospitalId,department:dept,avgConsultationTime:parseInt(time)||10})});
       const data = await res.json();
-      if (!res.ok) { showAlert('doctor-error', data.message); return; }
-
-      showAlert('doctor-success', `Dr. ${name} added successfully!`);
-      document.getElementById('doctor-name').value = '';
-      document.getElementById('doctor-dept').value = '';
+      if (!res.ok) { showA('doc-err',data.message); return; }
+      showA('doc-ok',`Dr. ${name} added successfully!`);
+      document.getElementById('d-name').value = '';
+      document.getElementById('d-dept').value = '';
       loadDoctors();
-    } catch (err) {
-      showAlert('doctor-error', 'Failed to add doctor');
-    }
+    } catch(e) { showA('doc-err','Failed to add doctor'); }
   }
 
-  // ── QR ─────────────────────────────────────────────
-  async function showQR(doctorId) {
-    try {
-      const res  = await fetch(`${BASE}/api/hospitals/qr/${doctorId}`);
-      const data = await res.json();
-      document.getElementById('qr-img').src              = data.qrImage;
-      document.getElementById('qr-doctor-name').textContent = data.doctorName;
-      document.getElementById('qr-dept').textContent     = `${data.department} · ${currentHospitalName}`;
-      document.getElementById('qr-modal').classList.add('show');
-    } catch (err) { alert('Failed to load QR'); }
-  }
-
-  function closeQR() {
-    document.getElementById('qr-modal').classList.remove('show');
-  }
-
-  function printQR() {
-    const img  = document.getElementById('qr-img').src;
-    const name = document.getElementById('qr-doctor-name').textContent;
-    const dept = document.getElementById('qr-dept').textContent;
-    const win  = window.open('');
-    win.document.write(`
-      <html><body style="text-align:center;padding:48px;font-family:sans-serif;">
-        <h2 style="color:#1847F0;font-size:28px;margin-bottom:4px;">MediQueue</h2>
-        <h3 style="margin:8px 0;font-size:20px;">${name}</h3>
-        <p style="color:#8891B0;margin-bottom:20px;">${dept}</p>
-        <img src="${img}" style="width:280px;height:280px;border-radius:12px;border:1px solid #eee;"/>
-        <p style="font-size:14px;color:#8891B0;margin-top:16px;">Scan to book your appointment</p>
-      </body></html>
-    `);
-    win.print();
-  }
-
-  // ── Queue ──────────────────────────────────────────
+  // ── QUEUE ─────────────────────────────────────────
   async function loadQueue() {
-    const doctorId = document.getElementById('queue-doctor-select').value;
-    if (!doctorId) return alert('Please select a doctor');
-    currentDoctorId = doctorId;
-    subscribeToQueue(doctorId);
+    const id = document.getElementById('q-doc-sel').value;
+    if (!id) return;
+    currentDoctorId = id;
+    subscribeQueue(id);
+    generateInlineQR(id);
     try {
-      const res  = await fetch(`${BASE}/api/queue/${doctorId}`);
+      const res  = await fetch(`${API}/queue/${id}`);
       const data = await res.json();
       setToken(data.currentToken, data.currentPatient);
       renderQueue(data.queue || []);
       setCount(data.waitingCount || 0);
-    } catch (err) { console.error(err); }
+    } catch(e) { console.error(e); }
   }
 
   async function nextPatient() {
-    if (!currentDoctorId) return alert('Select a doctor first');
+    if (!currentDoctorId) return;
     const btn = document.getElementById('next-btn');
     btn.disabled = true; btn.textContent = 'Loading...';
     try {
-      await fetch(`${BASE}/api/queue/${currentDoctorId}/next`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (err) { console.error(err); }
-    btn.disabled = false; btn.textContent = 'Next Patient →';
+      await fetch(`${API}/queue/${currentDoctorId}/next`,{method:'POST',headers:{'Content-Type':'application/json'}});
+    } catch(e) { console.error(e); }
+    btn.disabled = false; btn.textContent = 'Call Next Patient →';
   }
 
   function setToken(num, name) {
-    document.getElementById('current-token').textContent  = num ?? '--';
-    document.getElementById('current-patient').textContent = name ?? 'No patient yet';
+    document.getElementById('ns-token').textContent = num ? `#${num}` : '--';
+    document.getElementById('ns-name').textContent  = name || 'No patient yet';
   }
 
-  function setCount(count) {
-    document.getElementById('waiting-count').textContent =
-      `${count} patient${count !== 1 ? 's' : ''} waiting`;
-    document.getElementById('stat-waiting').textContent = count;
+  function setCount(c) {
+    document.getElementById('q-count').textContent = `${c} patient${c!==1?'s':''} waiting`;
+    document.getElementById('st-wait').textContent = c;
   }
 
   function renderQueue(queue) {
-    const tbody = document.getElementById('queue-body');
-    const empty = document.getElementById('queue-empty');
-    const wrap  = document.getElementById('queue-table-wrap');
+    const tbody = document.getElementById('q-body');
+    const empty = document.getElementById('q-empty');
+    const wrap  = document.getElementById('q-table');
     tbody.innerHTML = '';
-    if (!queue.length) {
-      wrap.style.display  = 'none';
-      empty.style.display = 'block';
-      empty.innerHTML = `<div class="emoji">🪑</div><p>No patients waiting</p>`;
-      return;
-    }
-    wrap.style.display  = 'block';
-    empty.style.display = 'none';
+    if (!queue.length) { wrap.style.display='none'; empty.style.display='block'; empty.innerHTML='<div class="e-ico">🪑</div><p>No patients waiting</p>'; return; }
+    wrap.style.display='block'; empty.style.display='none';
     queue.forEach(item => {
       tbody.innerHTML += `
         <tr>
           <td style="color:var(--muted);">${item.position}</td>
           <td><strong>#${item.tokenNumber}</strong></td>
           <td>${item.patientName}</td>
-          <td><span class="badge badge-${item.type}">${item.type}</span></td>
+          <td><span class="badge badge-${item.type==='emergency'?'em':'no'}">${item.type}</span></td>
           <td style="color:var(--muted);">${item.estimatedWaitTime}m</td>
-        </tr>
-      `;
+        </tr>`;
     });
   }
 
-  // ── Alert helpers ──────────────────────────────────
-  function showAlert(id, msg) {
-    document.getElementById(id).style.display = 'flex';
-    document.getElementById(`${id}-msg`).textContent = msg;
+  // ── QR ────────────────────────────────────────────
+  function generateInlineQR(doctorId) {
+    const el = document.getElementById('qr-inline');
+    el.innerHTML = '';
+    new QRCode(el, { text: `mediqueue://book?doctorId=${doctorId}&hospitalId=${hospitalId}`, width:120, height:120, colorDark:'#0F172A', colorLight:'#F0F4FF', correctLevel:QRCode.CorrectLevel.H });
   }
 
-  function hideAlert(id) {
-    document.getElementById(id).style.display = 'none';
+  async function showQRModal(doctorId, name, dept) {
+    document.getElementById('m-doc-name').textContent = name;
+    document.getElementById('m-dept').textContent     = `${dept} · ${hospitalName}`;
+    const el = document.getElementById('qr-render');
+    el.innerHTML = '';
+    new QRCode(el, { text:`mediqueue://book?doctorId=${doctorId}&hospitalId=${hospitalId}`, width:160, height:160, colorDark:'#0F172A', colorLight:'#FFFFFF', correctLevel:QRCode.CorrectLevel.H });
+    document.getElementById('qr-modal').classList.add('show');
   }
+
+  function closeModal() { document.getElementById('qr-modal').classList.remove('show'); }
+
+  function printQR() {
+    const qrEl = document.getElementById('qr-render').querySelector('img') || document.getElementById('qr-inline').querySelector('img');
+    const name  = document.getElementById('m-doc-name').textContent;
+    const dept  = document.getElementById('m-dept').textContent;
+    const win   = window.open('');
+    win.document.write(`<html><body style="text-align:center;padding:48px;font-family:sans-serif;">
+      <h2 style="color:#2563EB;font-size:26px;margin-bottom:4px;">MediQueue</h2>
+      <h3 style="font-size:20px;margin:8px 0;">${name}</h3>
+      <p style="color:#64748B;margin-bottom:20px;">${dept}</p>
+      <img src="${qrEl?.src||''}" style="width:260px;height:260px;border-radius:12px;border:1px solid #E2E8F0;"/>
+      <p style="font-size:13px;color:#94A3B8;margin-top:16px;">Scan to book your appointment</p>
+    </body></html>`);
+    win.print();
+  }
+
+  // ── HOSPITAL INFO ─────────────────────────────────
+  async function loadHospitalInfo() {
+    if (!hospitalId) return;
+    try {
+      const res  = await fetch(`${API}/hospitals`);
+      const list = await res.json();
+      const h    = list.find(x => x._id === hospitalId);
+      if (!h) return;
+      document.getElementById('info-content').innerHTML = `
+        <div style="margin-bottom:16px;">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Hospital Name</div>
+          <div style="font-size:16px;font-weight:800;">${h.name}</div>
+        </div>
+        <div style="margin-bottom:16px;">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Address</div>
+          <div style="font-size:14px;color:var(--mid);">${h.address}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Departments</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            ${(h.departments||[]).map(d=>`<span class="tag tag-blue">${d}</span>`).join('')}
+          </div>
+        </div>
+      `;
+    } catch(e) { console.error(e); }
+  }
+
+  // ── HELPERS ───────────────────────────────────────
+  function showA(id, msg) { document.getElementById(id).style.display='flex'; document.getElementById(`${id}-msg`).textContent=msg; }
+  function hideA(id)      { document.getElementById(id).style.display='none'; }
+  function toast(msg)     { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
 </script>
 </body>
 </html>

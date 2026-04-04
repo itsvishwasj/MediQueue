@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
-import 'package:http/http.dart' as http; // Make sure this import is added
+import 'package:http/http.dart' as http;
 import '../config/api.dart';
+import '../services/appointment_service.dart';
+import '../services/socket_service.dart';
+import '../models/appointment.dart';
 
 class QueueScreen extends StatefulWidget {
   final bool isScanned;
@@ -14,8 +17,11 @@ class QueueScreen extends StatefulWidget {
 }
 
 class _QueueScreenState extends State<QueueScreen> {
-  Map<String, dynamic>? selectedAppointment;
-  bool isFetching = false; // Initialized as false so selector shows immediately
+  // 🔹 Now using your real data model instead of a Map
+  AppointmentModel? selectedAppointment;
+  List<AppointmentModel> myAppointments = [];
+  bool isFetching = false;
+  bool isLoadingAppointments = true;
 
   // Theme Constants
   static const _bg = Color(0xFFF0F4FF);
@@ -23,68 +29,102 @@ class _QueueScreenState extends State<QueueScreen> {
   static const _ink = Color(0xFF0F172A);
   static const _muted = Color(0xFF64748B);
 
-  final appointments = [
-    {'doctor': 'Dr. Sharma', 'hospital': 'City Hospital', 'token': 7, 'department': 'Cardiology'},
-    {'doctor': 'Dr. Reddy', 'hospital': 'Apollo Clinic', 'token': 3, 'department': 'General'},
-  ];
-
-  // Real Data List
+  // Real Data List for the Live Queue
   List<Map<String, dynamic>> queue = [];
   int currentToken = 0; 
 
   @override
   void initState() {
     super.initState();
-    
-    // Auto-select and fetch if the user scanned a QR
-    if (widget.isScanned) {
-      selectedAppointment = appointments[0];
-      _fetchQueue();
+    _loadMyAppointments();
+  }
+
+  @override
+  void dispose() {
+    // 🔹 Clean up socket connection to save resources
+    if (selectedAppointment != null) {
+      SocketService.leaveQueue(selectedAppointment!.doctorId);
+    }
+    super.dispose();
+  }
+
+  // 🔹 API: Fetch user's actual booked appointments
+  Future<void> _loadMyAppointments() async {
+    try {
+      final appointments = await AppointmentService.getMyAppointments();
+      if (mounted) {
+        setState(() {
+          myAppointments = appointments.where((a) => a.status != 'completed' && a.status != 'cancelled').toList();
+          isLoadingAppointments = false;
+          
+          if (widget.isScanned && myAppointments.isNotEmpty) {
+            selectedAppointment = myAppointments.first;
+            _fetchQueueAndConnectSocket();
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading appointments: $e");
+      if (mounted) setState(() => isLoadingAppointments = false);
     }
   }
 
-  // ✅ MERGED LOGIC: Fetch and map backend keys to UI keys
-  Future<void> _fetchQueue() async {
+  // 🔹 API & SOCKETS: Fetch live queue and listen for updates
+  Future<void> _fetchQueueAndConnectSocket() async {
     if (selectedAppointment == null) return;
 
     setState(() => isFetching = true);
+    final doctorId = selectedAppointment!.doctorId;
 
     try {
-      final doctor = selectedAppointment!['doctor'];
-      final hospital = selectedAppointment!['hospital'];
-
+      // 1. Fetch initial state from your dedicated doctor queue endpoint
       final response = await http.get(
-        Uri.parse("${ApiConfig.baseUrl}/api/queue/$hospital/$doctor"),
+        Uri.parse("${ApiConfig.baseUrl}/api/queue/$doctorId"),
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> rawData = jsonDecode(response.body);
+        final data = jsonDecode(response.body);
 
         setState(() {
-          // Map backend keys ('patientName', 'tokenNumber') to UI keys ('name', 'token')
-          queue = rawData.map((item) {
-            return {
-              'name': item['patientName'] ?? 'Patient',
-              'token': item['tokenNumber'] ?? 0,
-            };
+          currentToken = data['currentToken'] ?? 0;
+          
+          final List rawQueue = data['queue'] ?? [];
+          queue = rawQueue.map((item) => {
+            'name': item['patientName'] ?? 'Patient',
+            'token': item['tokenNumber'] ?? 0,
           }).toList();
-
-          // Set current serving token to the first person in the list
-          if (queue.isNotEmpty) {
-            currentToken = queue.first['token'] ?? 0;
-          }
+          
           isFetching = false;
+        });
+
+        // 2. Connect to Socket.io for this specific doctor
+        SocketService.connect();
+        SocketService.joinQueue(doctorId);
+        
+        SocketService.onQueueUpdate(doctorId, (socketData) {
+          if (!mounted) return;
+          
+          // Listen for NEXT_PATIENT event from backend
+          if (socketData['type'] == 'NEXT_PATIENT') {
+            setState(() {
+              currentToken = socketData['currentToken'] ?? currentToken;
+              final List rawSocketQueue = socketData['queue'] ?? [];
+              queue = rawSocketQueue.map((item) => {
+                'name': item['patientName'] ?? 'Patient',
+                'token': item['tokenNumber'] ?? 0,
+              }).toList();
+            });
+          }
         });
       }
     } catch (e) {
       debugPrint("Queue fetch error: $e");
-      setState(() => isFetching = false);
+      if (mounted) setState(() => isFetching = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Show spinner ONLY when fetching and an appointment is active
     if (isFetching && selectedAppointment != null) {
       return const Scaffold(
         backgroundColor: _bg,
@@ -98,25 +138,29 @@ class _QueueScreenState extends State<QueueScreen> {
         child: selectedAppointment == null
             ? _buildAppointmentSelector()
             : RefreshIndicator(
-                onRefresh: _fetchQueue, // Pull to refresh the queue
+                onRefresh: _fetchQueueAndConnectSocket,
                 child: _buildQueueView(),
               ),
       ),
     );
   }
 
-  // ─── UI COMPONENTS (Kept from Code 1) ──────────────────────────────────
+  // ─── UI COMPONENTS (Untouched, just mapped to real model) ──────────────
 
   Widget _buildAppointmentSelector() {
     return Column(
       children: [
         _buildSelectorHeader(),
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-            itemCount: appointments.length,
-            itemBuilder: (_, i) => _buildAppointmentTile(appointments[i]),
-          ),
+          child: isLoadingAppointments 
+            ? const Center(child: CircularProgressIndicator())
+            : myAppointments.isEmpty
+                ? const Center(child: Text("No active appointments", style: TextStyle(color: _muted)))
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+                    itemCount: myAppointments.length,
+                    itemBuilder: (_, i) => _buildAppointmentTile(myAppointments[i]),
+                  ),
         ),
       ],
     );
@@ -137,11 +181,11 @@ class _QueueScreenState extends State<QueueScreen> {
     );
   }
 
-  Widget _buildAppointmentTile(Map<String, dynamic> apt) {
+  Widget _buildAppointmentTile(AppointmentModel apt) {
     return GestureDetector(
       onTap: () {
         setState(() => selectedAppointment = apt);
-        _fetchQueue(); // Fetch when clicked
+        _fetchQueueAndConnectSocket(); 
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
@@ -163,16 +207,16 @@ class _QueueScreenState extends State<QueueScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(apt['doctor'].toString(), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _ink)),
+                  Text(apt.doctorName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _ink)),
                   const SizedBox(height: 2),
-                  Text('${apt['department']} · ${apt['hospital']}', style: const TextStyle(fontSize: 12, color: _muted)),
+                  Text('${apt.doctorDepartment} · ${apt.hospitalName}', style: const TextStyle(fontSize: 12, color: _muted)),
                 ],
               ),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(color: _primary.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
-              child: Text('Token #${apt['token']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _primary)),
+              child: Text('Token #${apt.tokenNumber}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _primary)),
             ),
             const SizedBox(width: 8),
             const Icon(Icons.chevron_right_rounded, color: _muted, size: 20),
@@ -183,11 +227,11 @@ class _QueueScreenState extends State<QueueScreen> {
   }
 
   Widget _buildQueueView() {
-    final int yourToken = selectedAppointment!['token'] as int;
+    final int yourToken = selectedAppointment!.tokenNumber;
     final int ahead = (yourToken - currentToken).clamp(0, 999);
     double progress = yourToken == 0 ? 0 : (currentToken / yourToken).clamp(0.0, 1.0);
 
-    return ListView( // Changed to ListView to support RefreshIndicator
+    return ListView( 
       padding: EdgeInsets.zero,
       children: [
         _buildQueueHeader(currentToken, yourToken, ahead, progress),
@@ -208,7 +252,10 @@ class _QueueScreenState extends State<QueueScreen> {
           Row(
             children: [
               GestureDetector(
-                onTap: () => setState(() => selectedAppointment = null),
+                onTap: () {
+                  SocketService.leaveQueue(selectedAppointment!.doctorId);
+                  setState(() => selectedAppointment = null);
+                },
                 child: Container(
                   width: 36, height: 36,
                   decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
@@ -220,8 +267,8 @@ class _QueueScreenState extends State<QueueScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(selectedAppointment!['doctor'].toString(), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
-                    Text('${selectedAppointment!['hospital']}', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)),
+                    Text(selectedAppointment!.doctorName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+                    Text(selectedAppointment!.hospitalName, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)),
                   ],
                 ),
               ),
@@ -261,7 +308,7 @@ class _QueueScreenState extends State<QueueScreen> {
               _VertDivider(),
               _StatBox(label: 'Ahead', value: '$ahead'),
               _VertDivider(),
-              _StatBox(label: 'Est. Wait', value: '${ahead * 10} min'),
+              _StatBox(label: 'Est. Wait', value: '${ahead * selectedAppointment!.estimatedWaitTime} min'),
             ],
           ),
         ],
@@ -288,15 +335,14 @@ class _QueueScreenState extends State<QueueScreen> {
           ),
         ),
         ListView.builder(
-          shrinkWrap: true, // Important since it's inside a parent ListView
+          shrinkWrap: true, 
           physics: const NeverScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 20),
           itemCount: queue.length,
           itemBuilder: (_, i) {
             final person = queue[i];
             final token = person['token'] as int;
-            // logic to highlight "You" if your token matches the list item
-            final bool isMe = token == selectedAppointment!['token'];
+            final bool isMe = token == selectedAppointment!.tokenNumber;
 
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
@@ -318,7 +364,7 @@ class _QueueScreenState extends State<QueueScreen> {
                   Text(isMe ? "You" : person['name'].toString(), style: TextStyle(fontWeight: isMe ? FontWeight.w700 : FontWeight.w600, fontSize: 14, color: isMe ? _primary : _ink)),
                   const Spacer(),
                   if (isMe) const Icon(Icons.stars_rounded, color: _primary, size: 20)
-                  else Text('~${(token - currentToken).clamp(0, 99) * 10} min', style: const TextStyle(fontSize: 12, color: _muted)),
+                  else Text('~${(token - currentToken).clamp(0, 99) * selectedAppointment!.estimatedWaitTime} min', style: const TextStyle(fontSize: 12, color: _muted)),
                 ],
               ),
             );
@@ -328,8 +374,6 @@ class _QueueScreenState extends State<QueueScreen> {
     );
   }
 }
-
-// ─── Helpers (Kept from Code 1) ──────────────────────────────────────────────
 
 class _LivePill extends StatelessWidget {
   @override

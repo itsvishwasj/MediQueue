@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+// Add these imports to connect to your existing backend services & models
+import '../config/api.dart';
+import '../services/hospital_service.dart';
+import '../models/hospital.dart';
+import '../models/doctor.dart';
+
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 const _primary = Color(0xFF2563EB);
 const _success = Color(0xFF00C97A);
@@ -13,6 +19,7 @@ const _border = Color(0xFFE8ECFF);
 
 // ─── TOKEN SCREEN ────────────────────────────────────────────────────────────
 class TokenScreen extends StatelessWidget {
+  final String appointmentId;
   final String doctor;
   final String hospital;
   final String department;
@@ -21,6 +28,7 @@ class TokenScreen extends StatelessWidget {
 
   const TokenScreen({
     super.key,
+    required this.appointmentId,
     required this.doctor,
     required this.hospital,
     required this.department,
@@ -229,18 +237,56 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
   bool _isScheduled = false;
   String? _selectedSlot;
 
+  // Real Database Lists
+  List<HospitalModel> _hospitalList = [];
+  List<String> _departmentList = [];
+  List<DoctorModel> _doctorList = [];
+
+  // Live Queue Insight Variables
+  int waitingCount = 8;
+  int estimatedTime = 45;
+  int currentServing = 12;
+
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
 
   @override
   void initState() {
     super.initState();
+    _loadHospitals(); // Fetch data from backend
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeInOut);
     _animController.forward();
+  }
+
+  Future<void> _loadHospitals() async {
+    try {
+      final hospitals = await HospitalService.getHospitals();
+      setState(() => _hospitalList = hospitals);
+    } catch (e) {
+      debugPrint("Error loading hospitals: $e");
+    }
+  }
+
+  Future<void> _loadDepartments(String hospitalId) async {
+    try {
+      final depts = await HospitalService.getDepartments(hospitalId);
+      setState(() => _departmentList = depts);
+    } catch (e) {
+      debugPrint("Error loading departments: $e");
+    }
+  }
+
+  Future<void> _loadDoctors(String hospitalId, String dept) async {
+    try {
+      final docs = await HospitalService.getDoctors(hospitalId: hospitalId, department: dept);
+      setState(() => _doctorList = docs);
+    } catch (e) {
+      debugPrint("Error loading doctors: $e");
+    }
   }
 
   @override
@@ -279,28 +325,53 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
                   _label('Select Hospital'),
                   const SizedBox(height: 8),
                   _buildDropdown(
-                    'Hospital', hospital,
-                    ['City Hospital', 'Apollo'],
+                    'Hospital', 
+                    hospital,
+                    _hospitalList.map((h) => h.name).toList(),
                     Icons.local_hospital_outlined,
-                    (v) => setState(() => hospital = v),
+                    (v) {
+                      setState(() {
+                        hospital = v;
+                        department = null;
+                        doctor = null;
+                        _departmentList = [];
+                        _doctorList = [];
+                      });
+                      if (v != null) {
+                        final hId = _hospitalList.firstWhere((h) => h.name == v).id;
+                        _loadDepartments(hId);
+                      }
+                    },
                   ),
                   const SizedBox(height: 18),
 
                   _label('Select Department'),
                   const SizedBox(height: 8),
                   _buildDropdown(
-                    'Department', department,
-                    ['General', 'Cardiology'],
+                    'Department', 
+                    department,
+                    _departmentList,
                     Icons.medical_services_outlined,
-                    (v) => setState(() => department = v),
+                    (v) {
+                      setState(() {
+                        department = v;
+                        doctor = null;
+                        _doctorList = [];
+                      });
+                      if (v != null && hospital != null) {
+                        final hId = _hospitalList.firstWhere((h) => h.name == hospital).id;
+                        _loadDoctors(hId, v);
+                      }
+                    },
                   ),
                   const SizedBox(height: 18),
 
                   _label('Select Doctor'),
                   const SizedBox(height: 8),
                   _buildDropdown(
-                    'Doctor', doctor,
-                    ['Dr. Sharma', 'Dr. Reddy'],
+                    'Doctor', 
+                    doctor,
+                    _doctorList.map((d) => d.name).toList(),
                     Icons.person_outlined,
                     (v) => setState(() => doctor = v),
                   ),
@@ -487,33 +558,56 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: _ink,
+            color: _primary.withOpacity(0.1),
             borderRadius: BorderRadius.circular(28),
           ),
           child: Column(
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
+                children: [
                   Text(
                     'LIVE STATUS',
                     style: TextStyle(
-                      color: Colors.white60,
+                      color: _primary.withOpacity(0.7),
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Icon(Icons.circle, color: _success, size: 8),
+                  const Icon(Icons.circle, color: _success, size: 8),
                 ],
               ),
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _statItem('8', 'Waiting'),
-                  _statItem('~45', 'Mins'),
-                  _statItem('#12', 'Serving'),
+                  _statItem('$waitingCount', 'Waiting'),
+                  _statItem('~$estimatedTime', 'Mins'),
+                  _statItem('#$currentServing', 'Serving'),
                 ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        // 🔥 SMART SUGGESTION MESSAGE
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _primary.withOpacity(0.1)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.lightbulb_outline_rounded, color: _primary, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Less waiting after 11:30 AM',
+                  style: TextStyle(fontSize: 12.5, color: const Color(0xFF1D4ED8), fontWeight: FontWeight.w600),
+                ),
               ),
             ],
           ),
@@ -529,6 +623,50 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 🔥 DOCTOR AVAILABILITY CARD
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _primary.withOpacity(0.1)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.access_time_rounded, color: _primary, size: 22),
+              ),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    'Doctor Available',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: _ink),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '9 AM – 1 PM, 6 PM – 9 PM',
+                    style: TextStyle(color: _muted, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
         const Text(
           'Available Slots',
           style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: _ink),
@@ -574,8 +712,8 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
     return Column(children: [
       Text(val,
           style: const TextStyle(
-              color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-      Text(label, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+              color: _primary, fontSize: 22, fontWeight: FontWeight.w900)),
+      Text(label, style: TextStyle(color: _primary.withOpacity(0.6), fontSize: 11)),
     ]);
   }
 
@@ -632,7 +770,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
     );
   }
 
-  // 🔥 BOOKING FLOW — With real API call + slot support
+  // 🔥 BOOKING FLOW — With real API call to MongoDB
   Future<void> _handleBookingFlow() async {
     setState(() => isBooking = true);
 
@@ -641,27 +779,34 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
     );
 
     try {
+      // Look up the exact IDs required by the Node.js backend
+      final hId = _hospitalList.firstWhere((h) => h.name == hospital).id;
+      final dId = _doctorList.firstWhere((d) => d.name == doctor).id;
+
       final response = await http.post(
-        Uri.parse('http://192.168.0.125:5000/api/appointments'),
+        Uri.parse('${ApiConfig.baseUrl}/api/appointments'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'doctor': doctor!,
-          'hospital': hospital!,
+          'doctor': dId, // Sending ID instead of Name
+          'hospital': hId, // Sending ID instead of Name
           'department': department!,
-          if (_isScheduled && _selectedSlot != null) 'slot': _selectedSlot,
+          if (_isScheduled && _selectedSlot != null) 'type': 'normal',
         }),
       );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
+if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseData = jsonDecode(response.body); // The backend's response
         if (!mounted) return;
+        
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => TokenScreen(
+              appointmentId: responseData['_id'], // 👈 WE PASS THE MONGODB ID HERE
               doctor: doctor!,
               hospital: hospital!,
               department: department!,
-              token: DateTime.now().millisecondsSinceEpoch % 1000,
+              token: responseData['tokenNumber'] ?? (DateTime.now().millisecondsSinceEpoch % 1000),
               scheduledTime: _isScheduled ? _selectedSlot : null,
             ),
           ),
