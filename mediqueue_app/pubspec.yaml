@@ -35,7 +35,7 @@ dependencies:
   http: ^1.2.1
 
   # Socket.io for real-time queue
-  socket_io_client: ^2.0.3+1
+  socket_io_client: ^3.1.4
 
   # Local storage (save token, user info)
   shared_preferences: ^2.2.3
@@ -48,6 +48,9 @@ dependencies:
 
   # Easy navigation
   go_router: ^13.2.0
+
+  # Speech-to-text recognition
+  speech_to_text: ^7.3.0
 
 dev_dependencies:
   flutter_test:

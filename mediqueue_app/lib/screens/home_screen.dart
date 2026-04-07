@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../models/user.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../config/api.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 class HomeScreen extends StatefulWidget {
-  final Function(int) onNavigate;
+  final Function(int, {String? department}) onNavigate;
 
   const HomeScreen({super.key, required this.onNavigate});
 
@@ -37,6 +41,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _aiResult = '';
   String _aiSpecialty = '';
   String _aiEmoji = '';
+
+  // ── Speech-to-Text state ─────────────────────────────────────────
+  late stt.SpeechToText _speechToText;
+  bool _isListening = false;
+  String _speechResult = '';
 
   // ── Design tokens ────────────────────────────────────────────────
   // Deep navy + clinical teal palette — premium medical feel
@@ -80,6 +89,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.initState();
     _loadUser();
 
+    // Initialize speech-to-text
+    _speechToText = stt.SpeechToText();
+    _initializeSpeechToText();
+
     _entranceController = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
     _fadeAnim  = CurvedAnimation(parent: _entranceController, curve: const Interval(0.0, 0.7, curve: Curves.easeOut));
     _slideAnim = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
@@ -101,6 +114,57 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
+  Future<void> _initializeSpeechToText() async {
+    try {
+      final available = await _speechToText.initialize(
+        onError: (error) => debugPrint('Speech error: $error'),
+        onStatus: (status) => debugPrint('Speech status: $status'),
+      );
+      if (!available) {
+        debugPrint('Speech recognition not available on this device');
+      }
+    } catch (e) {
+      debugPrint('Error initializing speech to text: $e');
+    }
+  }
+
+  Future<void> _startListening() async {
+    if (!_isListening) {
+      try {
+        final available = await _speechToText.initialize();
+        if (available) {
+          setState(() => _isListening = true);
+          _speechToText.listen(
+            onResult: (result) {
+              if (mounted) {
+                setState(() {
+                  _speechResult = result.recognizedWords;
+                  if (result.finalResult) {
+                    // User has finished speaking
+                    _symptomsController.text = _speechResult;
+                    _isListening = false;
+                    _symptomsFocus.requestFocus();
+                  }
+                });
+              }
+            },
+            listenFor: const Duration(seconds: 30),
+            pauseFor: const Duration(seconds: 3),
+          );
+        }
+      } catch (e) {
+        debugPrint('Error starting speech to text: $e');
+      }
+    }
+  }
+
+  Future<void> _stopListening() async {
+    if (_isListening) {
+      await _speechToText.stop();
+      setState(() => _isListening = false);
+    }
+  }
+
   @override
   void dispose() {
     _entranceController.dispose();
@@ -109,6 +173,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _pulseController.dispose();
     _symptomsController.dispose();
     _symptomsFocus.dispose();
+    _stopListening();
+    _speechToText.cancel();
     super.dispose();
   }
 
@@ -117,33 +183,70 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (mounted) setState(() => _user = user);
   }
 
-  Future<void> _runTriage(String text) async {
+Future<void> _runTriage(String text) async {
     if (text.trim().isEmpty) return;
     _symptomsFocus.unfocus();
+    
+    debugPrint('🔍 [TRIAGE] Starting triage for: "$text"');
+    
     setState(() {
       _omniState   = _OmniBarState.thinking;
       _aiResult    = '';
       _aiSpecialty = '';
       _aiEmoji     = '';
     });
+    
     _expandController.reverse();
 
-    await Future.delayed(const Duration(milliseconds: 2000));
-    if (!mounted) return;
+    try {
+      // Call your new Node.js AI route
+      final url = '${ApiConfig.baseUrl}/api/ai/triage';
+      debugPrint('📡 [TRIAGE] Calling: $url');
+      
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'symptoms': text}),
+      );
 
-    final lower = text.toLowerCase();
-    var triage = _defaultTriage;
-    for (final entry in _triageMap.entries) {
-      if (lower.contains(entry.key)) { triage = entry.value; break; }
+      debugPrint('📊 [TRIAGE] Response status: ${response.statusCode}');
+      debugPrint('📝 [TRIAGE] Response body: ${response.body}');
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        debugPrint('✅ [TRIAGE] Parsed data: $data');
+        debugPrint('🏥 [TRIAGE] Department: ${data['department']}');
+        debugPrint('😊 [TRIAGE] Emoji: ${data['emoji']}');
+        debugPrint('💬 [TRIAGE] Message: ${data['message']}');
+        
+        setState(() {
+          _omniState   = _OmniBarState.result;
+          _aiSpecialty = data['department'] ?? 'General Medicine';
+          _aiEmoji     = data['emoji'] ?? '🩺';
+          _aiResult    = data['message'] ?? 'Please consult a doctor.';
+          
+          debugPrint('🎯 [TRIAGE] Set _aiSpecialty to: $_aiSpecialty');
+        });
+        _expandController.forward();
+      } else {
+        throw Exception('Failed to load AI response: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('❌ [TRIAGE] Error: $e');
+      if (!mounted) return;
+      // Fallback UI if the server fails
+      setState(() {
+        _omniState   = _OmniBarState.result;
+        _aiSpecialty = 'General Medicine';
+        _aiEmoji     = '🩺';
+        _aiResult    = 'Network error. Please try manual booking.';
+      });
+      debugPrint('⚠️  [TRIAGE] Using fallback: General Medicine');
+      _expandController.forward();
     }
-
-    setState(() {
-      _omniState   = _OmniBarState.result;
-      _aiResult    = triage.message;
-      _aiSpecialty = triage.specialty;
-      _aiEmoji     = triage.emoji;
-    });
-    _expandController.forward();
   }
 
   void _resetOmniBar() {
@@ -536,8 +639,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     key: const ValueKey('mic'),
                     onTap: _omniState == _OmniBarState.idle
                         ? () {
-                            _symptomsController.text = 'My chest hurts and I feel short of breath';
-                            _runTriage(_symptomsController.text);
+                            if (_isListening) {
+                              _stopListening();
+                            } else {
+                              _startListening();
+                            }
                           }
                         : null,
                     child: Container(
@@ -545,10 +651,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       height: 40,
                       margin: const EdgeInsets.symmetric(vertical: 4),
                       decoration: BoxDecoration(
-                        color: _teal.withOpacity(0.08),
+                        color: _isListening ? _teal.withOpacity(0.2) : _teal.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(12),
+                        border: _isListening ? Border.all(color: _teal, width: 2) : null,
                       ),
-                      child: const Icon(Icons.mic_none_rounded, color: _teal, size: 20),
+                      child: Icon(
+                        _isListening ? Icons.mic_rounded : Icons.mic_none_rounded, 
+                        color: _teal, 
+                        size: 20,
+                      ),
                     ),
                   ),
           ),
@@ -647,7 +758,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               const Spacer(),
               GestureDetector(
-                onTap: () => widget.onNavigate(1),
+                onTap: () => widget.onNavigate(1, department: _aiSpecialty),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(

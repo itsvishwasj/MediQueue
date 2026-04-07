@@ -281,8 +281,13 @@ class _TokenScreenState extends State<TokenScreen> {
 // ─── BOOK APPOINTMENT SCREEN ─────────────────────────────────────────────────
 class BookAppointmentScreen extends StatefulWidget {
   final String? preSelectedHospital;
+  final String? preSelectedDepartment;
 
-  const BookAppointmentScreen({super.key, this.preSelectedHospital});
+  const BookAppointmentScreen({
+    super.key, 
+    this.preSelectedHospital,
+    this.preSelectedDepartment,
+  });
 
   @override
   State<BookAppointmentScreen> createState() => _BookAppointmentScreenState();
@@ -297,6 +302,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
   bool _isScheduled = false;
   String? _selectedSlot;
   String? _pendingPreselectedHospital;
+  String? _pendingPreselectedDepartment;
 
   // Real Database Lists
   List<String> _allDepartmentList = [];
@@ -315,7 +321,12 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
   @override
   void initState() {
     super.initState();
+    debugPrint('📄 [BOOKING] BookAppointmentScreen initiated');
+    debugPrint('📄 [BOOKING] preSelectedDepartment: ${widget.preSelectedDepartment}');
+    debugPrint('📄 [BOOKING] preSelectedHospital: ${widget.preSelectedHospital}');
+    
     _pendingPreselectedHospital = widget.preSelectedHospital;
+    _pendingPreselectedDepartment = widget.preSelectedDepartment;
     _loadAllDepartments(); // Load all departments first
     _animController = AnimationController(
       vsync: this,
@@ -327,7 +338,10 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
 
   Future<void> _loadAllDepartments() async {
     try {
+      debugPrint('📡 [BOOKING] Loading all departments...');
       final hospitals = await HospitalService.getHospitals();
+      debugPrint('🏥 [BOOKING] Got ${hospitals.length} hospitals');
+      
       setState(() => _allHospitalList = hospitals);
 
       // Collect all unique departments from all hospitals
@@ -335,15 +349,63 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
       for (final hospital in hospitals) {
         final depts = await HospitalService.getDepartments(hospital.id);
         allDepts.addAll(depts);
+        debugPrint('  - ${hospital.name}: $depts');
       }
+      debugPrint('📂 [BOOKING] All departments collected: $allDepts');
+      
       setState(() => _allDepartmentList = allDepts.toList()..sort());
 
-      if (_pendingPreselectedHospital != null && _allHospitalList.isNotEmpty) {
+      // Handle pre-selected department first if available
+      if (_pendingPreselectedDepartment != null && _allDepartmentList.isNotEmpty) {
+        debugPrint('🎯 [BOOKING] Handling pre-selected department: $_pendingPreselectedDepartment');
+        _handlePreSelectedDepartment(_pendingPreselectedDepartment!);
+        _pendingPreselectedDepartment = null;
+      } else if (_pendingPreselectedHospital != null && _allHospitalList.isNotEmpty) {
+        debugPrint('🏥 [BOOKING] Handling pre-selected hospital: $_pendingPreselectedHospital');
         _handlePreSelectedHospital(_pendingPreselectedHospital!);
         _pendingPreselectedHospital = null;
+      } else {
+        debugPrint('ℹ️  [BOOKING] No pre-selected department or hospital');
       }
     } catch (e) {
-      debugPrint("Error loading departments: $e");
+      debugPrint("❌ [BOOKING] Error loading departments: $e");
+    }
+  }
+
+  void _handlePreSelectedDepartment(String dept) {
+    // Normalize the department name for matching
+    final normalizedDept = dept.trim();
+    
+    // Try to find exact match first (case-insensitive)
+    final matchingDept = _allDepartmentList.firstWhere(
+      (d) => d.toLowerCase() == normalizedDept.toLowerCase(),
+      orElse: () => '',
+    );
+    
+    if (matchingDept.isNotEmpty) {
+      debugPrint('✓ Department matched: $matchingDept');
+      setState(() {
+        department = matchingDept;
+        hospital = null;
+        doctor = null;
+        _filteredHospitalList = [];
+        _doctorList = [];
+      });
+      // Filter hospitals by this department
+      _filterHospitalsByDepartment(matchingDept);
+    } else {
+      debugPrint('⚠ Department not found: $normalizedDept. Adding to list for display. Available: $_allDepartmentList');
+      setState(() {
+        department = normalizedDept;
+        if (!_allDepartmentList.any((d) => d.toLowerCase() == normalizedDept.toLowerCase())) {
+          _allDepartmentList = [..._allDepartmentList, normalizedDept];
+        }
+        hospital = null;
+        doctor = null;
+        _filteredHospitalList = [];
+        _doctorList = [];
+      });
+      _filterHospitalsByDepartment(normalizedDept);
     }
   }
 
@@ -376,16 +438,21 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
 
   void _filterHospitalsByDepartment(String dept) async {
     final filteredHospitals = <HospitalModel>[];
+    final normalizedDept = dept.toLowerCase().trim();
+    
     for (final hospital in _allHospitalList) {
       try {
         final depts = await HospitalService.getDepartments(hospital.id);
-        if (depts.contains(dept)) {
+        // Case-insensitive department matching
+        final hasMatchingDept = depts.any((d) => d.toLowerCase().trim() == normalizedDept);
+        if (hasMatchingDept) {
           filteredHospitals.add(hospital);
         }
       } catch (e) {
         debugPrint("Error checking departments for ${hospital.name}: $e");
       }
     }
+    debugPrint('Filtered hospitals for $dept: ${filteredHospitals.length} found');
     setState(() => _filteredHospitalList = filteredHospitals);
   }
 
