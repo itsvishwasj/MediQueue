@@ -27,6 +27,7 @@ app.use('/api/hospitals',    require('./src/routes/hospitals'));
 app.use('/api/doctors',      require('./src/routes/doctors'));
 app.use('/api/appointments', require('./src/routes/appointments'));
 app.use('/api/queue',        require('./src/routes/queue'));
+app.use('/api/ai', require('./src/routes/ai'));
 
 // Serve index.html at root
 app.get('/', (req, res) => {
