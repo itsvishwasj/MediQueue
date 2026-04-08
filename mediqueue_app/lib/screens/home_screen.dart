@@ -42,6 +42,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _aiSpecialty = '';
   String _aiEmoji = '';
 
+  // ── Interactive Triage state ─────────────────────────────────────
+  bool _isAskingQuestions = false;
+  List<String> _questions = [];
+  Map<String, String> _answers = {};
+  int _currentQuestionIndex = 0;
+  final TextEditingController _answerController = TextEditingController();
+
   // ── Speech-to-Text state ─────────────────────────────────────────
   late stt.SpeechToText _speechToText;
   bool _isListening = false;
@@ -173,6 +180,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _pulseController.dispose();
     _symptomsController.dispose();
     _symptomsFocus.dispose();
+    _answerController.dispose();
     _stopListening();
     _speechToText.cancel();
     super.dispose();
@@ -183,30 +191,131 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (mounted) setState(() => _user = user);
   }
 
-Future<void> _runTriage(String text) async {
-    if (text.trim().isEmpty) return;
-    _symptomsFocus.unfocus();
-    
-    debugPrint('🔍 [TRIAGE] Starting triage for: "$text"');
-    
-    setState(() {
-      _omniState   = _OmniBarState.thinking;
-      _aiResult    = '';
-      _aiSpecialty = '';
-      _aiEmoji     = '';
-    });
-    
-    _expandController.reverse();
-
+  Future<List<String>> _fetchAiQuestions(String symptoms) async {
     try {
-      // Call your new Node.js AI route
-      final url = '${ApiConfig.baseUrl}/api/ai/triage';
-      debugPrint('📡 [TRIAGE] Calling: $url');
-      
+      final url = '${ApiConfig.baseUrl}/api/ai/questions';
       final response = await http.post(
         Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'symptoms': text}),
+        body: jsonEncode({'symptoms': symptoms}),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to fetch questions: ${response.statusCode}');
+      }
+
+      final data = jsonDecode(response.body);
+      if (data is Map && data['questions'] is List) {
+        final questions = List<String>.from(
+          data['questions'].map((q) => q.toString()).where((q) => q.trim().isNotEmpty),
+        );
+        if (questions.isNotEmpty) return questions;
+      }
+    } catch (e) {
+      debugPrint('[TRIAGE] Question generation failed: $e');
+    }
+
+    final fallbackQuestions = _buildFallbackQuestions(symptoms);
+    debugPrint('[TRIAGE] Using local fallback questions: $fallbackQuestions');
+    return fallbackQuestions;
+  }
+
+  List<String> _buildFallbackQuestions(String symptoms) {
+    final symptomText = symptoms.toLowerCase();
+    final questions = <String>[
+      'How long have you been experiencing these symptoms?',
+      'How severe are your symptoms on a scale of 1-10?',
+    ];
+
+    if (symptomText.contains('headache') || symptomText.contains('head')) {
+      questions.add('Do you also have nausea, vomiting, dizziness, or sensitivity to light?');
+    } else if (symptomText.contains('fever') || symptomText.contains('temperature')) {
+      questions.add('Have you checked your temperature, and do you have chills, cough, or body aches?');
+    } else if (symptomText.contains('pain')) {
+      questions.add('Can you describe the pain: sharp, dull, burning, throbbing, or constant?');
+    } else if (symptomText.contains('breath') || symptomText.contains('chest')) {
+      questions.add('Does it get worse with walking, deep breathing, or lying down?');
+    } else {
+      questions.add('Are you noticing any other symptoms along with this?');
+    }
+
+    questions.add('Do you have any medical conditions, allergies, or medicines you take regularly?');
+    return questions;
+  }
+
+  Future<void> _startInteractiveTriage(String symptoms) async {
+    setState(() {
+      _omniState = _OmniBarState.thinking;
+      _aiResult = '';
+      _aiSpecialty = '';
+      _aiEmoji = '';
+    });
+
+    final questions = await _fetchAiQuestions(symptoms);
+
+    if (!mounted) return;
+
+    if (questions.isEmpty) {
+      // Final safety fallback if question generation unexpectedly returns nothing.
+      await _runFinalTriage();
+      return;
+    }
+
+    setState(() {
+      _questions = questions;
+      _answers = {};
+      _currentQuestionIndex = 0;
+      _isAskingQuestions = true;
+      _omniState = _OmniBarState.idle;
+      _answerController.clear();
+    });
+  }
+
+  void _submitAnswer() {
+    final answer = _answerController.text.trim();
+    if (answer.isEmpty) return;
+
+    final currentQuestion = _questions[_currentQuestionIndex];
+    setState(() {
+      _answers[currentQuestion] = answer;
+      _answerController.clear();
+    });
+
+    if (_currentQuestionIndex >= _questions.length - 1) {
+      _runFinalTriage();
+      return;
+    }
+
+    setState(() {
+      _currentQuestionIndex++;
+    });
+  }
+
+  Future<void> _runFinalTriage() async {
+    final symptoms = _symptomsController.text;
+    final answersText = _answers.entries.map((e) => '${e.key}: ${e.value}').join('\n');
+
+    setState(() {
+      _isAskingQuestions = false;
+      _omniState = _OmniBarState.thinking;
+      _aiResult = '';
+      _aiSpecialty = '';
+      _aiEmoji = '';
+    });
+
+    _expandController.reverse();
+
+    try {
+      final url = '${ApiConfig.baseUrl}/api/ai/triage';
+      debugPrint('📡 [TRIAGE] Calling: $url');
+
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'symptoms': symptoms,
+          'answers': answersText,
+        }),
       );
 
       debugPrint('📊 [TRIAGE] Response status: ${response.statusCode}');
@@ -216,18 +325,18 @@ Future<void> _runTriage(String text) async {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        
+
         debugPrint('✅ [TRIAGE] Parsed data: $data');
         debugPrint('🏥 [TRIAGE] Department: ${data['department']}');
         debugPrint('😊 [TRIAGE] Emoji: ${data['emoji']}');
         debugPrint('💬 [TRIAGE] Message: ${data['message']}');
-        
+
         setState(() {
-          _omniState   = _OmniBarState.result;
+          _omniState = _OmniBarState.result;
           _aiSpecialty = data['department'] ?? 'General Medicine';
-          _aiEmoji     = data['emoji'] ?? '🩺';
-          _aiResult    = data['message'] ?? 'Please consult a doctor.';
-          
+          _aiEmoji = data['emoji'] ?? '🩺';
+          _aiResult = data['message'] ?? 'Please consult a doctor.';
+
           debugPrint('🎯 [TRIAGE] Set _aiSpecialty to: $_aiSpecialty');
         });
         _expandController.forward();
@@ -239,14 +348,24 @@ Future<void> _runTriage(String text) async {
       if (!mounted) return;
       // Fallback UI if the server fails
       setState(() {
-        _omniState   = _OmniBarState.result;
+        _omniState = _OmniBarState.result;
         _aiSpecialty = 'General Medicine';
-        _aiEmoji     = '🩺';
-        _aiResult    = 'Network error. Please try manual booking.';
+        _aiEmoji = '🩺';
+        _aiResult = 'Network error. Please try manual booking.';
       });
       debugPrint('⚠️  [TRIAGE] Using fallback: General Medicine');
       _expandController.forward();
     }
+  }
+
+Future<void> _runTriage(String text) async {
+    if (text.trim().isEmpty) return;
+    _symptomsFocus.unfocus();
+
+    debugPrint('🔍 [TRIAGE] Starting triage for: "$text"');
+
+    // Start interactive triage instead of direct API call
+    _startInteractiveTriage(text);
   }
 
   void _resetOmniBar() {
@@ -255,6 +374,11 @@ Future<void> _runTriage(String text) async {
       _aiResult = _aiSpecialty = _aiEmoji = '';
       _hasText = false;
       _symptomsController.clear();
+      _isAskingQuestions = false;
+      _questions = [];
+      _answers = {};
+      _currentQuestionIndex = 0;
+      _answerController.clear();
     });
     _expandController.reverse();
   }
@@ -532,8 +656,8 @@ Future<void> _runTriage(String text) async {
 
                 const SizedBox(height: 20),
 
-                // ── Input field ──────────────────────────────────────
-                _buildSymptomInput(),
+                // ── Input field or Questions ──────────────────────────
+                if (_isAskingQuestions) _buildQuestionsUI() else _buildSymptomInput(),
 
                 // ── Thinking indicator ───────────────────────────────
                 if (_omniState == _OmniBarState.thinking) ...[
@@ -703,6 +827,107 @@ Future<void> _runTriage(String text) async {
                 ),
               );
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Questions UI ──────────────────────────────────────────────────
+
+  Widget _buildQuestionsUI() {
+    if (_currentQuestionIndex >= _questions.length) return const SizedBox.shrink();
+
+    final currentQuestion = _questions[_currentQuestionIndex];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Question ${_currentQuestionIndex + 1} of ${_questions.length}',
+            style: TextStyle(
+              fontSize: 12,
+              color: _subtext,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            currentQuestion,
+            style: const TextStyle(
+              fontSize: 16,
+              color: _ink,
+              fontWeight: FontWeight.w600,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _answerController,
+            style: const TextStyle(
+              fontSize: 14,
+              color: _ink,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Your answer...',
+              hintStyle: TextStyle(
+                color: _subtext.withOpacity(0.50),
+                fontSize: 14,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: _border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: _teal, width: 2),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+            onChanged: (_) => setState(() {}),
+            onSubmitted: (_) => _submitAnswer(),
+            textInputAction: TextInputAction.send,
+            maxLines: 3,
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _answerController.text.trim().isNotEmpty ? _submitAnswer : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _teal,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    _currentQuestionIndex == _questions.length - 1 ? 'Get Recommendation' : 'Next',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1131,3 +1356,4 @@ class _TriageResponse {
   final String message;
   const _TriageResponse(this.specialty, this.emoji, this.color, this.message);
 }
+

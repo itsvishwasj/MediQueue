@@ -375,6 +375,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
   void _handlePreSelectedDepartment(String dept) {
     // Normalize the department name for matching
     final normalizedDept = dept.trim();
+    final fallbackGeneralDept = _resolveGeneralMedicineDepartment();
     
     // Try to find exact match first (case-insensitive)
     final matchingDept = _allDepartmentList.firstWhere(
@@ -394,19 +395,39 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
       // Filter hospitals by this department
       _filterHospitalsByDepartment(matchingDept);
     } else {
-      debugPrint('⚠ Department not found: $normalizedDept. Adding to list for display. Available: $_allDepartmentList');
+      final resolvedDept = fallbackGeneralDept ?? normalizedDept;
+      debugPrint(
+        '⚠ Department not found: $normalizedDept. '
+        'Falling back to: $resolvedDept. Available: $_allDepartmentList',
+      );
       setState(() {
-        department = normalizedDept;
-        if (!_allDepartmentList.any((d) => d.toLowerCase() == normalizedDept.toLowerCase())) {
-          _allDepartmentList = [..._allDepartmentList, normalizedDept];
-        }
+        department = resolvedDept;
         hospital = null;
         doctor = null;
         _filteredHospitalList = [];
         _doctorList = [];
       });
-      _filterHospitalsByDepartment(normalizedDept);
+      _filterHospitalsByDepartment(resolvedDept);
     }
+  }
+
+  String? _resolveGeneralMedicineDepartment() {
+    final exactMatch = _allDepartmentList.firstWhere(
+      (d) => d.toLowerCase().trim() == 'general medicine',
+      orElse: () => '',
+    );
+    if (exactMatch.isNotEmpty) return exactMatch;
+
+    final generalLikeMatch = _allDepartmentList.firstWhere(
+      (d) {
+        final normalized = d.toLowerCase().trim();
+        return normalized.contains('general') ||
+            normalized.contains('medicine') ||
+            normalized == 'gp';
+      },
+      orElse: () => '',
+    );
+    return generalLikeMatch.isNotEmpty ? generalLikeMatch : null;
   }
 
   void _handlePreSelectedHospital(String hospitalName) {
