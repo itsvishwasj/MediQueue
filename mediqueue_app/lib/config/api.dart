@@ -1,7 +1,6 @@
 class ApiConfig {
-  // Change this to your machine's IP when testing on a physical device
-  // Use 10.0.2.2 for Android emulator, localhost for web
-  static const String baseUrl = 'http://192.168.0.116:5001';
+  static const String baseUrl = 'https://mediqueue-backend-el5a.onrender.com';
+  static const String socketUrl = 'wss://mediqueue-backend-el5a.onrender.com';
 
   static const String register    = '$baseUrl/api/auth/register';
   static const String login       = '$baseUrl/api/auth/login';

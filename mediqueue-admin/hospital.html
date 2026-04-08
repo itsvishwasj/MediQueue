@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MediQueue — Hospital Portal</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700;9..40,800;9..40,900&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    :root{
+      --primary:#2563EB;--primary-lt:rgba(37,99,235,0.08);
+      --success:#00C97A;--success-lt:rgba(0,201,122,0.08);
+      --warning:#F59E0B;--warning-lt:rgba(245,158,11,0.08);
+      --danger:#F03B3B;--danger-lt:rgba(240,59,59,0.07);
+      --bg:#F0F4FF;--ink:#0F172A;--mid:#334155;--muted:#64748B;
+      --surface:#FFFFFF;--border:rgba(37,99,235,0.1);
+      --shadow:0 4px 16px rgba(37,99,235,0.07);--radius:16px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+
+    /* ── HEADER ── */
+    header{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:60px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;}
+    .h-logo{display:flex;align-items:center;gap:10px;}
+    .h-icon{width:34px;height:34px;background:var(--primary);border-radius:9px;display:flex;align-items:center;justify-content:center;color:white;font-weight:900;font-size:17px;}
+    .h-title{font-size:16px;font-weight:800;color:var(--ink);letter-spacing:-0.3px;}
+    .h-right{display:flex;align-items:center;gap:12px;}
+    .h-hospital{font-size:13px;font-weight:700;color:var(--primary);background:var(--primary-lt);padding:5px 12px;border-radius:20px;display:none;}
+    .live-pill{display:flex;align-items:center;gap:5px;background:var(--success-lt);border:1px solid rgba(0,201,122,0.2);border-radius:20px;padding:4px 10px;}
+    .live-dot{width:6px;height:6px;background:var(--success);border-radius:50%;animation:pulse 1.8s infinite;}
+    .live-pill span{font-size:11px;font-weight:700;color:var(--success);}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(1.5);}}
+    .back-btn{font-size:12px;color:var(--muted);text-decoration:none;transition:color 0.2s;}
+    .back-btn:hover{color:var(--primary);}
+
+    /* ── APP SHELL ── */
+    .app{display:flex;flex:1;overflow:hidden;}
+
+    /* ── SIDEBAR ── */
+    .sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);padding:20px 12px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;flex-shrink:0;}
+    .s-label{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;padding:0 10px;margin:14px 0 6px;}
+    .s-label:first-child{margin-top:0;}
+    .s-btn{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;border:none;background:none;cursor:pointer;width:100%;text-align:left;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--muted);transition:background 0.15s,color 0.15s;}
+    .s-btn:hover{background:var(--bg);color:var(--ink);}
+    .s-btn.active{background:var(--primary-lt);color:var(--primary);}
+    .s-btn .ico{font-size:16px;width:20px;text-align:center;}
+    .s-logout{margin-top:auto;color:var(--danger) !important;}
+    .s-logout:hover{background:var(--danger-lt) !important;color:var(--danger) !important;}
+
+    /* ── MAIN ── */
+    .main{flex:1;overflow-y:auto;padding:24px;}
+
+    /* ── AUTH SCREEN ── */
+    #auth-screen{
+      display:flex;align-items:center;justify-content:center;
+      position:fixed;inset:0;background:var(--bg);z-index:300;
+      padding:24px;
+    }
+    .auth-box{width:100%;max-width:460px;}
+    .auth-logo{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:32px;}
+    .auth-logo-icon{width:44px;height:44px;background:var(--primary);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-weight:900;font-size:22px;}
+    .auth-logo-text{font-size:20px;font-weight:900;letter-spacing:-0.5px;}
+    .auth-heading{font-size:26px;font-weight:900;letter-spacing:-0.8px;text-align:center;margin-bottom:6px;}
+    .auth-sub{font-size:14px;color:var(--muted);text-align:center;margin-bottom:28px;}
+    .auth-tabs{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:4px;margin-bottom:24px;}
+    .auth-tab{flex:1;padding:11px;border:none;background:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;transition:background 0.2s,color 0.2s;}
+    .auth-tab.active{background:var(--primary);color:white;box-shadow:0 4px 12px rgba(37,99,235,0.2);}
+
+    /* ── CARDS ── */
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;}
+    .card-title{font-size:15px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px;letter-spacing:-0.2px;}
+    .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+
+    /* ── FORMS ── */
+    .fg{margin-bottom:14px;}
+    .fg label{display:block;font-size:12px;font-weight:700;color:var(--mid);margin-bottom:6px;}
+    .fg input,.fg select,.fg textarea{width:100%;padding:10px 13px;border:1.5px solid rgba(37,99,235,0.12);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--ink);background:var(--surface);outline:none;transition:border-color 0.2s,box-shadow 0.2s;}
+    .fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-lt);}
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+    /* ── BUTTONS ── */
+    .btn{padding:10px 18px;border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:transform 0.15s,box-shadow 0.15s,opacity 0.15s;display:inline-flex;align-items:center;gap:6px;}
+    .btn:hover:not(:disabled){transform:translateY(-1px);}
+    .btn:disabled{opacity:0.5;cursor:not-allowed;}
+    .btn-primary{background:var(--primary);color:white;}
+    .btn-primary:hover:not(:disabled){box-shadow:0 6px 16px rgba(37,99,235,0.3);}
+    .btn-success{background:var(--success);color:white;}
+    .btn-success:hover:not(:disabled){box-shadow:0 6px 16px rgba(0,201,122,0.3);}
+    .btn-outline{background:white;color:var(--primary);border:1.5px solid var(--primary);}
+    .btn-danger{background:var(--danger-lt);color:var(--danger);border:1px solid rgba(240,59,59,0.2);}
+    .btn-danger:hover:not(:disabled){background:var(--danger);color:white;box-shadow:0 4px 12px rgba(240,59,59,0.3);}
+    .btn-ghost{background:var(--bg);color:var(--muted);}
+    .btn-full{width:100%;justify-content:center;}
+    .btn-sm{padding:6px 12px;font-size:12px;}
+
+    /* ── ALERTS ── */
+    .alert{padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:12px;display:flex;align-items:flex-start;gap:8px;}
+    .alert-error{background:var(--danger-lt);color:#B91C1C;border:1px solid rgba(240,59,59,0.2);}
+    .alert-success{background:var(--success-lt);color:#065F46;border:1px solid rgba(0,201,122,0.2);}
+
+    /* ── STATS ── */
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;}
+    .stat .v{font-size:28px;font-weight:900;color:var(--primary);letter-spacing:-1px;}
+    .stat .l{font-size:11px;color:var(--muted);font-weight:600;margin-top:3px;}
+
+    /* ── TABLE ── */
+    .tbl-wrap{border-radius:12px;overflow:hidden;border:1px solid var(--border);}
+    table{width:100%;border-collapse:collapse;font-size:13px;}
+    th{background:var(--bg);padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:0.05em;text-transform:uppercase;}
+    td{padding:11px 14px;border-top:1px solid var(--border);vertical-align:middle;}
+    tr:hover td{background:rgba(37,99,235,0.02);}
+    .badge{padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;}
+    .badge-em{background:var(--danger-lt);color:var(--danger);}
+    .badge-no{background:var(--success-lt);color:#059669;}
+    .tag{font-size:11px;padding:2px 8px;border-radius:6px;font-weight:600;}
+    .tag-blue{background:var(--primary-lt);color:var(--primary);}
+    .tag-gray{background:var(--bg);color:var(--muted);}
+
+    /* ── NOW SERVING ── */
+    .now-serving{background:linear-gradient(135deg,var(--primary) 0%,#1d4ed8 100%);color:white;border-radius:20px;padding:28px;text-align:center;margin-bottom:16px;box-shadow:0 10px 32px rgba(37,99,235,0.25);}
+    .ns-label{font-size:11px;font-weight:700;opacity:0.65;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;}
+    .ns-token{font-size:68px;font-weight:900;line-height:1;letter-spacing:-3px;margin-bottom:6px;}
+    .ns-name{font-size:15px;opacity:0.75;font-weight:500;}
+    .next-btn{width:100%;padding:14px;border:none;border-radius:12px;background:var(--ink);color:white;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:800;cursor:pointer;transition:transform 0.15s,box-shadow 0.15s,opacity 0.15s;margin-bottom:16px;}
+    .next-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 24px rgba(15,23,42,0.2);}
+    .next-btn:disabled{opacity:0.5;cursor:not-allowed;}
+
+    /* ── QUEUE TABLE ── */
+    .queue-wrap{border-radius:12px;overflow:hidden;border:1px solid var(--border);}
+
+    /* ── EMPTY STATE ── */
+    .empty{text-align:center;padding:40px 20px;color:var(--muted);}
+    .empty .e-ico{font-size:28px;margin-bottom:10px;}
+    .empty p{font-size:14px;}
+
+    /* ── QR SECTION ── */
+    #qr-reception-render{display:flex;justify-content:center;padding:20px;background:var(--bg);border-radius:14px;margin:16px 0;}
+    .qr-cabin-wrap{display:flex;justify-content:center;margin-bottom:14px;padding:16px;background:var(--bg);border-radius:12px;}
+
+    /* ── MODAL ── */
+    .overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);backdrop-filter:blur(4px);z-index:400;align-items:center;justify-content:center;padding:16px;}
+    .overlay.show{display:flex;}
+    .modal{background:var(--surface);border-radius:24px;padding:32px;width:100%;max-width:380px;box-shadow:0 32px 80px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto;}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+    .modal-header h3{font-size:17px;font-weight:900;letter-spacing:-0.3px;}
+    .modal-close{width:32px;height:32px;border:none;background:var(--bg);border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--muted);}
+    .modal-close:hover{background:var(--danger-lt);color:var(--danger);}
+
+    /* Cabin QR modal */
+    .modal-qr-name{font-size:17px;font-weight:900;margin-bottom:4px;}
+    .modal-qr-sub{font-size:13px;color:var(--muted);margin-bottom:18px;}
+    #qr-render{display:flex;justify-content:center;margin-bottom:16px;padding:16px;background:var(--bg);border-radius:12px;}
+    .modal-hint{font-size:12px;color:var(--muted);margin-bottom:20px;}
+    .m-btns{display:flex;gap:10px;justify-content:center;}
+
+    /* Confirm modal */
+    .confirm-ico{font-size:40px;text-align:center;margin-bottom:12px;}
+    .confirm-msg{font-size:14px;color:var(--mid);text-align:center;margin-bottom:24px;line-height:1.6;}
+    .confirm-btns{display:flex;gap:10px;}
+    .confirm-btns .btn{flex:1;justify-content:center;}
+
+    /* ── TOAST ── */
+    #toast{position:fixed;bottom:24px;right:24px;background:var(--ink);color:white;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 12px 32px rgba(0,0,0,0.2);transform:translateY(80px);opacity:0;transition:0.3s cubic-bezier(0.175,0.885,0.32,1.275);z-index:500;}
+    #toast.show{transform:translateY(0);opacity:1;}
+
+    /* ── PAGE ROUTING ── */
+    .page{display:none;}
+    .page.active{display:block;}
+    #dashboard{display:none;}
+
+    /* ── SETTINGS ── */
+    .settings-section{margin-bottom:20px;}
+    .settings-section-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px;}
+
+    /* ── RECEPTION QR ── */
+    .reception-hero{text-align:center;padding:32px 24px;background:linear-gradient(135deg,var(--primary-lt) 0%,rgba(0,201,122,0.05) 100%);border-radius:18px;border:1px dashed rgba(37,99,235,0.2);margin-bottom:20px;}
+    .reception-hero h3{font-size:17px;font-weight:900;margin-bottom:6px;}
+    .reception-hero p{font-size:13px;color:var(--muted);max-width:320px;margin:0 auto 16px;}
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     AUTH SCREEN — shown before login
+══════════════════════════════════════════ -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">+</div>
+      <span class="auth-logo-text">MediQueue</span>
+    </div>
+    <div class="auth-heading">Hospital Portal</div>
+    <div class="auth-sub">Sign in or register to manage your queue</div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('t-login',this)">Sign In</button>
+      <button class="auth-tab" onclick="switchAuthTab('t-register',this)">Register</button>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <div id="t-login">
+      <div class="card">
+        <div id="login-err" class="alert alert-error" style="display:none;"><span id="login-err-msg"></span></div>
+        <div class="fg"><label>Email Address *</label><input id="l-email" type="email" placeholder="hospital@email.com"/></div>
+        <div class="fg"><label>Password *</label><input id="l-pass" type="password" placeholder="Your password"/></div>
+        <button class="btn btn-primary btn-full" id="btn-login" onclick="doLogin()" style="margin-top:4px;">Sign In →</button>
+        <div style="text-align:center;margin-top:14px;">
+          <span style="font-size:12px;color:var(--muted);">No account yet? </span>
+          <button onclick="switchAuthTab('t-register',document.querySelectorAll('.auth-tab')[1])" style="border:none;background:none;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;color:var(--primary);cursor:pointer;">Register →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div id="t-register" style="display:none;">
+      <div class="card">
+        <div id="reg-err" class="alert alert-error" style="display:none;"><span id="reg-err-msg"></span></div>
+        <div class="fg"><label>Hospital Name *</label><input id="r-name" placeholder="e.g. Apollo Clinic"/></div>
+        <div class="fg"><label>Address *</label><input id="r-addr" placeholder="e.g. Koramangala, Bengaluru"/></div>
+        <div class="fg"><label>Departments <span style="font-weight:400;color:var(--muted);">(comma separated)</span></label><input id="r-depts" placeholder="Cardiology, General, Orthopedics"/></div>
+        <div class="g2">
+          <div class="fg"><label>Contact Email *</label><input id="r-email" type="email" placeholder="hospital@email.com"/></div>
+          <div class="fg"><label>Phone *</label><input id="r-phone" type="tel" placeholder="+91 XXXXX XXXXX"/></div>
+        </div>
+        <div class="g2">
+          <div class="fg"><label>Password *</label><input id="r-pass" type="password" placeholder="Min 6 characters"/></div>
+          <div class="fg"><label>Confirm Password *</label><input id="r-pass2" type="password" placeholder="Repeat password"/></div>
+        </div>
+        <button class="btn btn-primary btn-full" id="btn-reg" onclick="doRegister()" style="margin-top:4px;">Register Hospital →</button>
+        <div style="text-align:center;margin-top:14px;">
+          <span style="font-size:12px;color:var(--muted);">Already registered? </span>
+          <button onclick="switchAuthTab('t-login',document.querySelectorAll('.auth-tab')[0])" style="border:none;background:none;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;color:var(--primary);cursor:pointer;">Sign In →</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-top:16px;">
+      <a href="/" class="back-btn" style="font-size:12px;">← Back to Home</a>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MAIN HEADER (shown post-login)
+══════════════════════════════════════════ -->
+<header>
+  <div class="h-logo">
+    <div class="h-icon">+</div>
+    <span class="h-title">MediQueue</span>
+  </div>
+  <div class="h-right">
+    <div class="live-pill"><div class="live-dot"></div><span>Live</span></div>
+    <span class="h-hospital" id="h-name-badge"></span>
+    <a href="/" class="back-btn">← Home</a>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- ── SIDEBAR ── -->
+  <div class="sidebar" id="sidebar" style="display:none;">
+    <div class="s-label">Manage</div>
+    <button class="s-btn active" onclick="showPage('p-queue',this)"><span class="ico">🔢</span>Live Queue</button>
+    <button class="s-btn" onclick="showPage('p-doctors',this)"><span class="ico">👨‍⚕️</span>Doctors</button>
+
+    <div class="s-label">Hospital</div>
+    <button class="s-btn" onclick="showPage('p-reception',this)"><span class="ico">🏢</span>Reception QR</button>
+    <button class="s-btn" onclick="showPage('p-settings',this)"><span class="ico">⚙️</span>Settings</button>
+
+    <button class="s-btn s-logout" onclick="doLogout()" style="margin-top:auto;"><span class="ico">🚪</span>Sign Out</button>
+  </div>
+
+  <div class="main">
+    <div id="dashboard">
+
+      <!-- ══════════════════════════════════════════
+           PAGE: LIVE QUEUE
+      ═══════════════════════════════════════════ -->
+      <div id="p-queue" class="page active">
+        <div style="display:flex;gap:20px;align-items:flex-start;">
+
+          <!-- Queue list (left) -->
+          <div style="flex:1;">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title" style="margin:0;">🪑 Waiting Queue</div>
+                <span id="q-count" style="font-size:12px;color:var(--muted);font-weight:600;"></span>
+              </div>
+              <div class="fg" style="margin-bottom:0;">
+                <label>Select Doctor</label>
+                <div style="display:flex;gap:8px;">
+                  <select id="q-doc-sel" style="flex:1;padding:10px 12px;border:1.5px solid rgba(37,99,235,0.12);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;"></select>
+                  <button class="btn btn-primary btn-sm" onclick="loadQueue()">Load</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="q-empty" class="empty"><div class="e-ico">🪑</div><p>Select a doctor to view queue</p></div>
+            <div class="queue-wrap" id="q-table" style="display:none;">
+              <table>
+                <thead><tr><th>#</th><th>Token</th><th>Patient</th><th>Type</th><th>Wait</th></tr></thead>
+                <tbody id="q-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Action panel (right) -->
+          <div style="width:260px;flex-shrink:0;">
+            <div class="now-serving">
+              <div class="ns-label">Now Serving</div>
+              <div class="ns-token" id="ns-token">--</div>
+              <div class="ns-name"  id="ns-name">No patient yet</div>
+            </div>
+            <button class="next-btn" id="next-btn" onclick="nextPatient()">Call Next Patient →</button>
+
+            <!-- Cabin QR Card -->
+            <div class="card" style="text-align:center;">
+              <div class="card-title" style="justify-content:center;">📷 Cabin QR Code</div>
+              <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">Patient scans at cabin door to check in</p>
+              <div class="qr-cabin-wrap" id="qr-inline"></div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-ghost btn-sm btn-full" onclick="openCabinQRModal()">🔍 Enlarge</button>
+                <button class="btn btn-outline btn-sm btn-full" onclick="printCabinQR()">🖨️ Print</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════
+           PAGE: DOCTORS
+      ═══════════════════════════════════════════ -->
+      <div id="p-doctors" class="page">
+
+        <div class="stats" id="doc-stats">
+          <div class="stat"><div class="v" id="st-docs">0</div><div class="l">Doctors</div></div>
+          <div class="stat"><div class="v" id="st-wait">0</div><div class="l">Waiting Now</div></div>
+          <div class="stat"><div class="v" id="st-depts">0</div><div class="l">Departments</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title" style="margin:0;">👨‍⚕️ All Doctors</div>
+            <button class="btn btn-primary btn-sm" onclick="openModal('modal-add-doctor')">+ Add Doctor</button>
+          </div>
+
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Doctor</th><th>Department</th><th>Avg Time</th><th>Actions</th></tr></thead>
+              <tbody id="doc-tbl-body">
+                <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--muted);">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════
+           PAGE: RECEPTION CENTER (Hospital QR)
+      ═══════════════════════════════════════════ -->
+      <div id="p-reception" class="page">
+        <div class="reception-hero">
+          <h3>🏢 Reception QR Code</h3>
+          <p>Place this QR at your front desk. Patients scan it to see all available doctors and book their slot.</p>
+          <button class="btn btn-primary" onclick="loadReceptionQR()">Generate QR →</button>
+        </div>
+
+        <div id="reception-qr-card" style="display:none;">
+          <div class="card" style="text-align:center;">
+            <div class="card-title" style="justify-content:center;">🏢 Hospital Reception QR</div>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:4px;" id="reception-hosp-name"></p>
+            <p style="font-size:12px;color:var(--muted);margin-bottom:16px;">Patients scan to browse all doctors</p>
+            <div id="qr-reception-render"></div>
+            <p style="font-size:11px;color:var(--muted);margin-bottom:20px;font-family:monospace;" id="reception-qr-payload"></p>
+            <div style="display:flex;gap:10px;justify-content:center;">
+              <button class="btn btn-primary" onclick="printReceptionQR()">🖨️ Print for Front Desk</button>
+              <button class="btn btn-ghost" onclick="loadReceptionQR()">🔄 Regenerate</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════
+           PAGE: SETTINGS
+      ═══════════════════════════════════════════ -->
+      <div id="p-settings" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title" style="margin:0;">⚙️ Hospital Settings</div>
+          </div>
+          <div id="set-err" class="alert alert-error" style="display:none;"><span id="set-err-msg"></span></div>
+          <div id="set-ok"  class="alert alert-success" style="display:none;"><span id="set-ok-msg"></span></div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Basic Information</div>
+            <div class="fg"><label>Hospital Name *</label><input id="set-name" placeholder="Hospital Name"/></div>
+            <div class="fg"><label>Address *</label><input id="set-addr" placeholder="Address"/></div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Departments</div>
+            <div class="fg"><label>Departments <span style="font-weight:400;color:var(--muted);">(comma separated)</span></label>
+              <input id="set-depts" placeholder="Cardiology, General, Pediatrics"/>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;margin-top:4px;">
+            <button class="btn btn-primary" id="btn-settings" onclick="saveSettings()">Save Changes →</button>
+            <button class="btn btn-ghost" onclick="loadSettingsForm()">Reset</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /dashboard -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+
+<!-- ════════════════════════════════════════════
+     MODAL: ADD DOCTOR
+════════════════════════════════════════════ -->
+<div class="overlay" id="modal-add-doctor">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>➕ Add Doctor</h3>
+      <button class="modal-close" onclick="closeModal('modal-add-doctor')">✕</button>
+    </div>
+    <div id="doc-err" class="alert alert-error" style="display:none;"><span id="doc-err-msg"></span></div>
+    <div id="doc-ok"  class="alert alert-success" style="display:none;"><span id="doc-ok-msg"></span></div>
+    <div class="fg"><label>Doctor Name *</label><input id="d-name" placeholder="e.g. Dr. Sharma"/></div>
+    <div class="fg"><label>Department *</label><select id="d-dept"><option value="">Select Department...</option></select></div>
+    <div class="fg"><label>Avg. Consultation Time (minutes)</label><input id="d-time" type="number" value="10" min="1" max="60"/></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-doctor')">Cancel</button>
+      <button class="btn btn-primary" id="btn-add-doc" onclick="addDoctor()">Add Doctor →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     MODAL: EDIT DOCTOR
+════════════════════════════════════════════ -->
+<div class="overlay" id="modal-edit-doctor">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ Edit Doctor</h3>
+      <button class="modal-close" onclick="closeModal('modal-edit-doctor')">✕</button>
+    </div>
+    <div id="ed-err" class="alert alert-error" style="display:none;"><span id="ed-err-msg"></span></div>
+    <input type="hidden" id="ed-id"/>
+    <div class="fg"><label>Doctor Name *</label><input id="ed-name" placeholder="Dr. Name"/></div>
+    <div class="fg"><label>Department *</label><select id="ed-dept"><option value="">Select Department...</option></select></div>
+    <div class="fg"><label>Avg. Consultation Time (minutes)</label><input id="ed-time" type="number" min="1"/></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
+      <button class="btn btn-ghost" onclick="closeModal('modal-edit-doctor')">Cancel</button>
+      <button class="btn btn-primary" id="btn-ed" onclick="saveDoctor()">Save Changes →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     MODAL: CABIN QR (enlarged)
+════════════════════════════════════════════ -->
+<div class="overlay" id="modal-cabin-qr">
+  <div class="modal" style="text-align:center;">
+    <div class="modal-header" style="justify-content:center;position:relative;">
+      <h3>📷 Cabin QR Code</h3>
+      <button class="modal-close" style="position:absolute;right:0;" onclick="closeModal('modal-cabin-qr')">✕</button>
+    </div>
+    <div class="modal-qr-name" id="m-doc-name"></div>
+    <div class="modal-qr-sub" id="m-dept"></div>
+    <div id="qr-render"></div>
+    <p class="modal-hint">📷 Print and place outside the cabin door</p>
+    <div class="m-btns">
+      <button class="btn btn-primary btn-sm" onclick="printCabinQR()">🖨️ Print</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-cabin-qr')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     MODAL: CONFIRM DELETE
+════════════════════════════════════════════ -->
+<div class="overlay" id="modal-confirm">
+  <div class="modal" style="max-width:340px;text-align:center;">
+    <div class="confirm-ico">👨‍⚕️</div>
+    <div class="modal-header" style="justify-content:center;margin-bottom:8px;">
+      <h3>Delete Doctor?</h3>
+    </div>
+    <p class="confirm-msg" id="confirm-msg">This cannot be undone.</p>
+    <div class="confirm-btns">
+      <button class="btn btn-ghost" onclick="closeModal('modal-confirm')">Cancel</button>
+      <button class="btn btn-danger" id="confirm-ok-btn" onclick="confirmDelete()">Delete →</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  const API = 'http://localhost:5000/api';
+  let hospitalId = null, hospitalName = '', hospitalToken = null;
+  let socket = null, currentDoctorId = null, allDoctors = [];
+  let hospitalDepartments = [];
+  let pendingDeleteId = null, pendingDeleteName = '';
+
+  // ── INIT ──────────────────────────────────────────
+  window.onload = () => {
+    // Close overlays on backdrop click
+    document.querySelectorAll('.overlay').forEach(o => {
+      o.addEventListener('click', e => { if (e.target === o) o.classList.remove('show'); });
+    });
+  };
+
+  // ── AUTH TAB SWITCH ───────────────────────────────
+  function switchAuthTab(id, btn) {
+    ['t-login','t-register'].forEach(t => document.getElementById(t).style.display='none');
+    document.getElementById(id).style.display = 'block';
+    document.querySelectorAll('.auth-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  // ── LOGIN ─────────────────────────────────────────
+  async function doLogin() {
+    const email = document.getElementById('l-email').value.trim();
+    const pass  = document.getElementById('l-pass').value;
+    hideA('login-err');
+    if (!email || !pass) { showA('login-err','Email and password are required'); return; }
+    const btn = document.getElementById('btn-login');
+    btn.textContent = 'Signing in...'; btn.disabled = true;
+    try {
+      const res  = await fetch(`${API}/auth/login/hospital`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email, password:pass})});
+      const data = await res.json();
+      if (!res.ok) { showA('login-err', data.message || 'Invalid credentials'); return; }
+      
+      hospitalToken = data.token;
+      hospitalId    = data.user.hospitalId;
+      hospitalName  = data.user.name;
+      openDashboard();
+    } catch(e) { showA('login-err','Server error. Is backend running?'); }
+    finally { btn.textContent = 'Sign In →'; btn.disabled = false; }
+  }
+
+  // ── REGISTER ─────────────────────────────────────
+  async function doRegister() {
+    const name  = document.getElementById('r-name').value.trim();
+    const addr  = document.getElementById('r-addr').value.trim();
+    const depts = document.getElementById('r-depts').value.split(',').map(d=>d.trim()).filter(Boolean);
+    const email = document.getElementById('r-email').value.trim();
+    const phone = document.getElementById('r-phone').value.trim();
+    const pass  = document.getElementById('r-pass').value;
+    const pass2 = document.getElementById('r-pass2').value;
+    hideA('reg-err');
+    if (!name || !addr || !email || !phone || !pass) { showA('reg-err','All fields are required'); return; }
+    if (pass !== pass2) { showA('reg-err','Passwords do not match'); return; }
+    if (pass.length < 6) { showA('reg-err','Password must be at least 6 characters'); return; }
+    const btn = document.getElementById('btn-reg');
+    btn.textContent = 'Registering...'; btn.disabled = true;
+    try {
+      const payload = {
+        hospitalName: name,
+        address: addr,
+        departments: depts,
+        email: email,
+        phone: phone,
+        password: pass
+      };
+      const res  = await fetch(`${API}/auth/register/hospital`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+      const data = await res.json();
+      if (!res.ok) { showA('reg-err', data.message || 'Registration failed'); return; }
+      // Auto-login after registration — call login route
+      const lRes  = await fetch(`${API}/auth/login/hospital`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email, password:pass})});
+      const lData = await lRes.json();
+      if (lRes.ok) {
+        hospitalToken = lData.token;
+        hospitalId    = lData.user.hospitalId;
+        hospitalName  = lData.user.name;
+        openDashboard();
+      } else {
+        // Registration succeeded but auto-login failed — ask user to sign in
+        showA('reg-err','Registered! Please sign in now.');
+        switchAuthTab('t-login', document.querySelectorAll('.auth-tab')[0]);
+        document.getElementById('l-email').value = email;
+      }
+    } catch(e) { showA('reg-err','Server error. Is backend running?'); }
+    finally { btn.textContent = 'Register Hospital →'; btn.disabled = false; }
+  }
+
+  // ── LOGOUT ────────────────────────────────────────
+  function doLogout() {
+    hospitalId = null; hospitalName = ''; hospitalToken = null;
+    allDoctors = []; currentDoctorId = null;
+    if (socket) socket.disconnect();
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('sidebar').style.display   = 'none';
+    document.getElementById('h-name-badge').style.display = 'none';
+    document.getElementById('auth-screen').style.display  = 'flex';
+  }
+
+  // ── OPEN DASHBOARD ────────────────────────────────
+  function openDashboard() {
+    document.getElementById('auth-screen').style.display  = 'none';
+    document.getElementById('dashboard').style.display    = 'block';
+    document.getElementById('sidebar').style.display      = 'flex';
+    document.getElementById('h-name-badge').textContent   = hospitalName;
+    document.getElementById('h-name-badge').style.display = 'inline-block';
+    initSocket();
+    loadDoctors();
+    loadSettingsForm();
+  }
+
+  // ── PAGE SWITCHING ────────────────────────────────
+  function showPage(id, btn) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.s-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (id === 'p-doctors')   loadDoctors();
+    if (id === 'p-settings')  loadSettingsForm();
+  }
+
+  // ── MODAL CONTROL ─────────────────────────────────
+  function openModal(id)  { document.getElementById(id).classList.add('show'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+  // ── SOCKET ────────────────────────────────────────
+  function initSocket() {
+    socket = io('http://localhost:5000');
+    socket.on('connect', () => console.log('Socket connected'));
+  }
+
+  function subscribeQueue(doctorId) {
+    if (currentDoctorId) { socket.emit('leaveQueue',currentDoctorId); socket.off(`queue:${currentDoctorId}`); }
+    socket.emit('joinQueue', doctorId);
+    socket.on(`queue:${doctorId}`, data => {
+      if (data.type === 'NEXT_PATIENT')    { setToken(data.currentToken,data.currentPatient); renderQueue(data.queue); setCount(data.waitingCount); }
+      if (data.type === 'QUEUE_EMPTY')     { setToken(null,'No more patients'); renderQueue([]); setCount(0); }
+      if (data.type === 'NEW_APPOINTMENT') loadQueue();
+    });
+  }
+
+  // ── DOCTORS ───────────────────────────────────────
+  async function loadDoctors() {
+    if (!hospitalId) return;
+    try {
+      const res = await fetch(`${API}/doctors?hospitalId=${hospitalId}`);
+      allDoctors = await res.json();
+      renderDoctorsTable(allDoctors);
+      populateQueueSel(allDoctors);
+      document.getElementById('st-docs').textContent  = allDoctors.length;
+      document.getElementById('st-depts').textContent = [...new Set(allDoctors.map(d=>d.department))].length;
+    } catch(e) { console.error(e); }
+  }
+
+  function renderDoctorsTable(docs) {
+    const tbody = document.getElementById('doc-tbl-body');
+    if (!docs.length) {
+      tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="e-ico">🩺</div><p>No doctors added yet. Add your first doctor!</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = docs.map(d => `
+      <tr>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:32px;height:32px;background:var(--primary-lt);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:14px;">👨‍⚕️</div>
+            <strong>${d.name}</strong>
+          </div>
+        </td>
+        <td><span class="tag tag-blue">${d.department}</span></td>
+        <td style="color:var(--muted);">~${d.avgConsultationTime} min</td>
+        <td>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-outline btn-sm" onclick="openCabinQRForDoctor('${d._id}','${escQ(d.name)}','${escQ(d.department)}')">📷 QR</button>
+            <button class="btn btn-ghost btn-sm" onclick="editDoctor('${d._id}','${escQ(d.name)}','${escQ(d.department)}','${d.avgConsultationTime}')">✏️ Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="confirmDeleteDoctor('${d._id}','${escQ(d.name)}')">🗑</button>
+          </div>
+        </td>
+      </tr>`).join('');
+  }
+
+  function populateQueueSel(docs) {
+    const sel = document.getElementById('q-doc-sel');
+    sel.innerHTML = '<option value="">-- Select doctor --</option>';
+    docs.forEach(d => sel.innerHTML += `<option value="${d._id}">${d.name} — ${d.department}</option>`);
+  }
+
+  // ── ADD DOCTOR ────────────────────────────────────
+  async function addDoctor() {
+    const name = document.getElementById('d-name').value.trim();
+    const dept = document.getElementById('d-dept').value.trim();
+    const time = document.getElementById('d-time').value;
+    hideA('doc-err'); hideA('doc-ok');
+    if (!name || !dept) { showA('doc-err','Name and department are required'); return; }
+    const btn = document.getElementById('btn-add-doc');
+    btn.textContent = 'Adding...'; btn.disabled = true;
+    try {
+      const res  = await fetch(`${API}/doctors`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, hospital:hospitalId, department:dept, avgConsultationTime:parseInt(time)||10})});
+      const data = await res.json();
+      if (!res.ok) { showA('doc-err', data.message); return; }
+      showA('doc-ok', `✅ Dr. ${name} added!`);
+      document.getElementById('d-name').value = '';
+      document.getElementById('d-dept').value = '';
+      document.getElementById('d-time').value = '10';
+      toast(`Dr. ${name} added`);
+      loadDoctors();
+      setTimeout(() => closeModal('modal-add-doctor'), 1200);
+    } catch(e) { showA('doc-err','Failed to add doctor'); }
+    finally { btn.textContent = 'Add Doctor →'; btn.disabled = false; }
+  }
+
+  // ── EDIT DOCTOR ───────────────────────────────────
+  function editDoctor(id, name, dept, time) {
+    document.getElementById('ed-id').value   = id;
+    document.getElementById('ed-name').value = name;
+    
+    // Set the select element's value if it matches the current predefined options
+    const edDept = document.getElementById('ed-dept');
+    if (edDept) {
+      // Temporarily append the option if it doesn't cleanly exist so edits don't break
+      if (!Array.from(edDept.options).some(o => o.value === dept)) {
+        edDept.innerHTML += `<option value="${escQ(dept)}">${escQ(dept)}</option>`;
+      }
+      edDept.value = dept;
+    }
+
+    document.getElementById('ed-time').value = time;
+    hideA('ed-err');
+    openModal('modal-edit-doctor');
+  }
+
+  async function saveDoctor() {
+    const btn  = document.getElementById('btn-ed');
+    const id   = document.getElementById('ed-id').value;
+    const name = document.getElementById('ed-name').value.trim();
+    const dept = document.getElementById('ed-dept').value.trim();
+    const time = document.getElementById('ed-time').value;
+    hideA('ed-err');
+    if (!name || !dept) { showA('ed-err','Name and department are required'); return; }
+    btn.textContent = 'Saving...'; btn.disabled = true;
+    try {
+      const res  = await fetch(`${API}/doctors/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, department:dept, avgConsultationTime:parseInt(time)||10})});
+      const data = await res.json();
+      if (!res.ok) { showA('ed-err', data.message); return; }
+      toast('Doctor updated!');
+      closeModal('modal-edit-doctor');
+      loadDoctors();
+    } catch(e) { showA('ed-err','Server error.'); }
+    finally { btn.textContent = 'Save Changes →'; btn.disabled = false; }
+  }
+
+  // ── DELETE DOCTOR ─────────────────────────────────
+  function confirmDeleteDoctor(id, name) {
+    pendingDeleteId   = id;
+    pendingDeleteName = name;
+    document.getElementById('confirm-msg').textContent = `Dr. ${name} will be permanently removed. This cannot be undone.`;
+    openModal('modal-confirm');
+  }
+
+  async function confirmDelete() {
+    const btn = document.getElementById('confirm-ok-btn');
+    btn.textContent = 'Deleting...'; btn.disabled = true;
+    try {
+      const res = await fetch(`${API}/doctors/${pendingDeleteId}`, {method:'DELETE'});
+      if (!res.ok) { toast('Delete failed'); return; }
+      toast(`Dr. ${pendingDeleteName} removed`);
+      closeModal('modal-confirm');
+      loadDoctors();
+    } catch(e) { toast('Server error'); }
+    finally { btn.textContent = 'Delete →'; btn.disabled = false; }
+  }
+
+  // ── QUEUE ─────────────────────────────────────────
+  async function loadQueue() {
+    const id = document.getElementById('q-doc-sel').value;
+    if (!id) return;
+    currentDoctorId = id;
+    subscribeQueue(id);
+    generateCabinQR(id);
+    try {
+      const res  = await fetch(`${API}/queue/${id}`);
+      const data = await res.json();
+      setToken(data.currentToken, data.currentPatient);
+      renderQueue(data.queue || []);
+      setCount(data.waitingCount || 0);
+    } catch(e) { console.error(e); }
+  }
+
+  async function nextPatient() {
+    if (!currentDoctorId) return;
+    const btn = document.getElementById('next-btn');
+    btn.disabled = true; btn.textContent = 'Loading...';
+    try { await fetch(`${API}/queue/${currentDoctorId}/next`, {method:'POST', headers:{'Content-Type':'application/json'}}); }
+    catch(e) { console.error(e); }
+    btn.disabled = false; btn.textContent = 'Call Next Patient →';
+  }
+
+  function setToken(num, name) {
+    document.getElementById('ns-token').textContent = num ? `#${num}` : '--';
+    document.getElementById('ns-name').textContent  = name || 'No patient yet';
+  }
+  function setCount(c) {
+    document.getElementById('q-count').textContent = `${c} patient${c!==1?'s':''} waiting`;
+    document.getElementById('st-wait').textContent = c;
+  }
+
+  function renderQueue(queue) {
+    const tbody = document.getElementById('q-body');
+    const empty = document.getElementById('q-empty');
+    const wrap  = document.getElementById('q-table');
+    tbody.innerHTML = '';
+    if (!queue.length) { wrap.style.display='none'; empty.style.display='block'; empty.innerHTML='<div class="e-ico">🪑</div><p>No patients waiting</p>'; return; }
+    wrap.style.display='block'; empty.style.display='none';
+    queue.forEach(item => {
+      tbody.innerHTML += `<tr>
+        <td style="color:var(--muted);">${item.position}</td>
+        <td><strong>#${item.tokenNumber}</strong></td>
+        <td>${item.patientName}</td>
+        <td><span class="badge badge-${item.type==='emergency'?'em':'no'}">${item.type}</span></td>
+        <td style="color:var(--muted);">${item.estimatedWaitTime}m</td>
+      </tr>`;
+    });
+  }
+
+  // ── CABIN QR (Doctor) ─────────────────────────────
+  function generateCabinQR(doctorId) {
+    const el = document.getElementById('qr-inline');
+    el.innerHTML = '';
+    if (!doctorId) return;
+    new QRCode(el, { text:`mediqueue://book?doctorId=${doctorId}&hospitalId=${hospitalId}`, width:120, height:120, colorDark:'#0F172A', colorLight:'#F0F4FF', correctLevel:QRCode.CorrectLevel.H });
+  }
+
+  function openCabinQRModal() {
+    if (!currentDoctorId) { toast('Select a doctor first'); return; }
+    const doc = allDoctors.find(d => d._id === currentDoctorId);
+    openCabinQRForDoctor(currentDoctorId, doc?.name||'Doctor', doc?.department||'');
+  }
+
+  function openCabinQRForDoctor(doctorId, name, dept) {
+    document.getElementById('m-doc-name').textContent = name;
+    document.getElementById('m-dept').textContent     = `${dept} · ${hospitalName}`;
+    const el = document.getElementById('qr-render');
+    el.innerHTML = '';
+    new QRCode(el, { text:`mediqueue://book?doctorId=${doctorId}&hospitalId=${hospitalId}`, width:180, height:180, colorDark:'#0F172A', colorLight:'#FFFFFF', correctLevel:QRCode.CorrectLevel.H });
+    openModal('modal-cabin-qr');
+  }
+
+  function printCabinQR() {
+    const qrEl = document.getElementById('qr-render').querySelector('img') || document.getElementById('qr-inline').querySelector('img');
+    const name = document.getElementById('m-doc-name').textContent || 'Doctor';
+    const dept = document.getElementById('m-dept').textContent     || hospitalName;
+    const win  = window.open('');
+    win.document.write(`<html><body style="text-align:center;padding:48px;font-family:sans-serif;">
+      <h2 style="color:#2563EB;font-size:26px;margin-bottom:4px;">MediQueue</h2>
+      <h3 style="font-size:20px;margin:8px 0;">${name}</h3>
+      <p style="color:#64748B;margin-bottom:20px;">${dept}</p>
+      <img src="${qrEl?.src||''}" style="width:260px;height:260px;border-radius:12px;border:1px solid #E2E8F0;"/>
+      <p style="font-size:13px;color:#94A3B8;margin-top:16px;">Scan to book your appointment</p>
+    </body></html>`);
+    win.print();
+  }
+
+  // ── RECEPTION QR (Hospital) ───────────────────────
+  async function loadReceptionQR() {
+    try {
+      const res  = await fetch(`${API}/hospitals/${hospitalId}/reception-qr`);
+      const data = await res.json();
+      if (!res.ok) { toast('Failed to load Reception QR'); return; }
+
+      // Show QR card
+      document.getElementById('reception-qr-card').style.display = 'block';
+      document.getElementById('reception-hosp-name').textContent = data.hospitalName;
+      document.getElementById('reception-qr-payload').textContent = data.payload;
+
+      // Render QR from base64
+      const el = document.getElementById('qr-reception-render');
+      el.innerHTML = '';
+      if (data.qrDataUrl) {
+        const img = document.createElement('img');
+        img.src = data.qrDataUrl;
+        img.style.cssText = 'width:200px;height:200px;border-radius:10px;';
+        el.appendChild(img);
+      } else {
+        // Fallback: generate client-side
+        new QRCode(el, { text:data.payload, width:200, height:200, colorDark:'#0F172A', colorLight:'#F0F4FF', correctLevel:QRCode.CorrectLevel.H });
+      }
+    } catch(e) {
+      // Fallback: generate client-side if backend QR route not yet deployed
+      const el = document.getElementById('qr-reception-render');
+      el.innerHTML = '';
+      new QRCode(el, { text:`mediqueue://hospital?id=${hospitalId}`, width:200, height:200, colorDark:'#0F172A', colorLight:'#F0F4FF', correctLevel:QRCode.CorrectLevel.H });
+      document.getElementById('reception-qr-card').style.display = 'block';
+      document.getElementById('reception-hosp-name').textContent = hospitalName;
+      document.getElementById('reception-qr-payload').textContent = `mediqueue://hospital?id=${hospitalId}`;
+    }
+  }
+
+  function printReceptionQR() {
+    const img = document.getElementById('qr-reception-render').querySelector('img');
+    const win = window.open('');
+    win.document.write(`<html><body style="text-align:center;padding:48px;font-family:sans-serif;">
+      <h2 style="color:#2563EB;font-size:26px;margin-bottom:4px;">MediQueue</h2>
+      <h3 style="font-size:20px;margin:8px 0;">${hospitalName}</h3>
+      <p style="color:#64748B;margin-bottom:20px;">Reception Check-In</p>
+      <img src="${img?.src||''}" style="width:280px;height:280px;border-radius:12px;border:1px solid #E2E8F0;"/>
+      <p style="font-size:13px;color:#94A3B8;margin-top:16px;">Scan to browse all doctors &amp; book your slot</p>
+    </body></html>`);
+    win.print();
+  }
+
+  // ── SETTINGS ─────────────────────────────────────
+  async function loadSettingsForm() {
+    if (!hospitalId) return;
+    hideA('set-err'); hideA('set-ok');
+    try {
+      const res  = await fetch(`${API}/hospitals`);
+      const list = await res.json();
+      const h    = list.find(x => x._id === hospitalId);
+      if (!h) return;
+      hospitalDepartments = h.departments || [];
+      document.getElementById('set-name').value  = h.name || '';
+      document.getElementById('set-addr').value  = h.address || '';
+      document.getElementById('set-depts').value = hospitalDepartments.join(', ');
+      populateDeptDropdowns();
+    } catch(e) { console.error(e); }
+  }
+
+  function populateDeptDropdowns() {
+    const dSel = document.getElementById('d-dept');
+    if (dSel) {
+      dSel.innerHTML = '<option value="">Select Department...</option>';
+      hospitalDepartments.forEach(d => dSel.innerHTML += `<option value="${escQ(d)}">${escQ(d)}</option>`);
+    }
+    const edSel = document.getElementById('ed-dept');
+    if (edSel) {
+      edSel.innerHTML = '<option value="">Select Department...</option>';
+      hospitalDepartments.forEach(d => edSel.innerHTML += `<option value="${escQ(d)}">${escQ(d)}</option>`);
+    }
+  }
+
+  async function saveSettings() {
+    const btn   = document.getElementById('btn-settings');
+    const name  = document.getElementById('set-name').value.trim();
+    const addr  = document.getElementById('set-addr').value.trim();
+    const depts = document.getElementById('set-depts').value.split(',').map(d=>d.trim()).filter(Boolean);
+    hideA('set-err'); hideA('set-ok');
+    if (!name || !addr) { showA('set-err','Name and address are required'); return; }
+    btn.textContent = 'Saving...'; btn.disabled = true;
+    try {
+      const res  = await fetch(`${API}/hospitals/${hospitalId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, address:addr, departments:depts})});
+      const data = await res.json();
+      if (!res.ok) { showA('set-err', data.message); return; }
+      hospitalName = data.name;
+      hospitalDepartments = depts;
+      document.getElementById('h-name-badge').textContent = hospitalName;
+      populateDeptDropdowns();
+      showA('set-ok','✅ Settings saved!');
+      toast('Hospital profile updated');
+    } catch(e) { showA('set-err','Server error.'); }
+    finally { btn.textContent = 'Save Changes →'; btn.disabled = false; }
+  }
+
+  // ── HELPERS ───────────────────────────────────────
+  function showA(id, msg) { const el=document.getElementById(id); el.style.display='flex'; document.getElementById(`${id}-msg`).textContent=msg; }
+  function hideA(id)      { document.getElementById(id).style.display='none'; }
+  function toast(msg)     { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
+  function escQ(str)      { return String(str||'').replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
+</script>
+</body>
+</html>

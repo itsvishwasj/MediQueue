@@ -5,7 +5,7 @@ class SocketService {
   static IO.Socket? _socket;
 
   static void connect() {
-    _socket = IO.io(ApiConfig.baseUrl, <String, dynamic>{
+    _socket = IO.io(ApiConfig.socketUrl, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': true,
     });

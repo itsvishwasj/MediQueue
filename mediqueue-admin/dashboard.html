@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MediQueue — Admin Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800;9..40,900&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    :root{
+      --primary:#2563EB;--primary-lt:rgba(37,99,235,0.08);
+      --success:#00C97A;--success-lt:rgba(0,201,122,0.08);
+      --warning:#F59E0B;--warning-lt:rgba(245,158,11,0.08);
+      --danger:#F03B3B;--danger-lt:rgba(240,59,59,0.07);
+      --bg:#F0F4FF;--ink:#0F172A;--mid:#334155;--muted:#64748B;
+      --surface:#FFFFFF;--border:rgba(37,99,235,0.1);
+      --shadow:0 4px 16px rgba(37,99,235,0.07);--radius:16px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+
+    /* HEADER */
+    header{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:60px;background:var(--ink);flex-shrink:0;}
+    .h-logo{display:flex;align-items:center;gap:10px;}
+    .h-icon{width:34px;height:34px;background:var(--primary);border-radius:9px;display:flex;align-items:center;justify-content:center;color:white;font-weight:900;font-size:17px;}
+    .h-title{font-size:16px;font-weight:800;color:white;letter-spacing:-0.3px;}
+    .admin-tag{font-size:11px;font-weight:700;color:var(--warning);background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.2);border-radius:20px;padding:4px 10px;}
+    .back-btn{font-size:12px;color:rgba(255,255,255,0.4);text-decoration:none;transition:color 0.2s;}
+    .back-btn:hover{color:white;}
+
+    /* APP SHELL */
+    .app{display:flex;flex:1;overflow:hidden;}
+
+    /* SIDEBAR */
+    .sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);padding:20px 12px;display:flex;flex-direction:column;gap:2px;flex-shrink:0;overflow-y:auto;}
+    .s-label{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;padding:0 10px;margin:14px 0 6px;}
+    .s-label:first-child{margin-top:0;}
+    .s-btn{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;border:none;background:none;cursor:pointer;width:100%;text-align:left;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--muted);transition:background 0.15s,color 0.15s;}
+    .s-btn:hover{background:var(--bg);color:var(--ink);}
+    .s-btn.active{background:var(--primary-lt);color:var(--primary);}
+    .s-btn .ico{font-size:16px;width:20px;text-align:center;}
+
+    /* MAIN */
+    .main{flex:1;overflow-y:auto;padding:24px;}
+
+    /* PAGE TITLE */
+    .page-title{font-size:22px;font-weight:900;letter-spacing:-0.6px;margin-bottom:4px;}
+    .page-sub{font-size:13px;color:var(--muted);margin-bottom:24px;}
+    .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;}
+
+    /* CARDS */
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;}
+    .card-title{font-size:15px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px;letter-spacing:-0.2px;}
+    .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+
+    /* FORMS */
+    .fg{margin-bottom:14px;}
+    .fg label{display:block;font-size:12px;font-weight:700;color:var(--mid);margin-bottom:6px;}
+    .fg input,.fg select,.fg textarea{width:100%;padding:10px 13px;border:1.5px solid rgba(37,99,235,0.12);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--ink);background:var(--surface);outline:none;transition:border-color 0.2s,box-shadow 0.2s;}
+    .fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-lt);}
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+    /* BUTTONS */
+    .btn{padding:10px 18px;border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:transform 0.15s,box-shadow 0.15s,opacity 0.15s;display:inline-flex;align-items:center;gap:6px;}
+    .btn:hover:not(:disabled){transform:translateY(-1px);}
+    .btn:disabled{opacity:0.5;cursor:not-allowed;}
+    .btn-primary{background:var(--primary);color:white;}
+    .btn-primary:hover:not(:disabled){box-shadow:0 6px 16px rgba(37,99,235,0.3);}
+    .btn-success{background:var(--success);color:white;}
+    .btn-success:hover:not(:disabled){box-shadow:0 6px 16px rgba(0,201,122,0.3);}
+    .btn-ink{background:var(--ink);color:white;}
+    .btn-ink:hover:not(:disabled){box-shadow:0 6px 16px rgba(15,23,42,0.2);}
+    .btn-outline{background:white;color:var(--primary);border:1.5px solid var(--primary);}
+    .btn-danger{background:var(--danger-lt);color:var(--danger);border:1px solid rgba(240,59,59,0.2);}
+    .btn-danger:hover:not(:disabled){background:var(--danger);color:white;box-shadow:0 4px 12px rgba(240,59,59,0.3);}
+    .btn-ghost{background:var(--bg);color:var(--muted);}
+    .btn-full{width:100%;justify-content:center;}
+    .btn-sm{padding:6px 12px;font-size:12px;}
+
+    /* STATS */
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;}
+    .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;}
+    .stat-card .ico-wrap{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:12px;}
+    .stat-card .v{font-size:28px;font-weight:900;letter-spacing:-1px;}
+    .stat-card .l{font-size:11px;color:var(--muted);font-weight:600;margin-top:3px;}
+
+    /* LIVE PILL */
+    .live-pill{display:inline-flex;align-items:center;gap:5px;background:var(--success-lt);border:1px solid rgba(0,201,122,0.2);border-radius:20px;padding:4px 10px;margin-bottom:16px;}
+    .live-dot{width:6px;height:6px;background:var(--success);border-radius:50%;animation:pulse 1.8s infinite;}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(1.5);}}
+    .live-pill span{font-size:11px;font-weight:700;color:var(--success);}
+
+    /* TABLE */
+    .tbl-wrap{border-radius:12px;overflow:hidden;border:1px solid var(--border);}
+    table{width:100%;border-collapse:collapse;font-size:13px;}
+    th{background:var(--bg);padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:0.05em;text-transform:uppercase;}
+    td{padding:11px 14px;border-top:1px solid var(--border);vertical-align:middle;}
+    tr:hover td{background:rgba(37,99,235,0.02);}
+    .badge{padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;}
+    .badge-em{background:var(--danger-lt);color:var(--danger);}
+    .badge-no{background:var(--success-lt);color:#059669;}
+    .badge-dept{background:var(--primary-lt);color:var(--primary);}
+    .badge-hosp{background:var(--warning-lt);color:#92400E;}
+
+    /* EMPTY */
+    .empty{text-align:center;padding:48px 20px;color:var(--muted);}
+    .empty .e-ico{font-size:32px;margin-bottom:10px;}
+    .empty p{font-size:14px;}
+
+    /* TOAST */
+    #toast{position:fixed;bottom:24px;right:24px;background:var(--ink);color:white;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 12px 32px rgba(0,0,0,0.2);transform:translateY(80px);opacity:0;transition:0.3s cubic-bezier(0.175,0.885,0.32,1.275);z-index:600;}
+    #toast.show{transform:translateY(0);opacity:1;}
+    #toast.toast-danger{background:var(--danger);}
+
+    /* ALERT */
+    .alert{padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+    .alert-error{background:var(--danger-lt);color:#B91C1C;border:1px solid rgba(240,59,59,0.2);}
+    .alert-success{background:var(--success-lt);color:#065F46;border:1px solid rgba(0,201,122,0.2);}
+
+    /* PAGE ROUTING */
+    .page{display:none;}
+    .page.active{display:block;}
+
+    /* ── MODAL ── */
+    .overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);z-index:400;align-items:center;justify-content:center;padding:16px;}
+    .overlay.show{display:flex;}
+    .modal{background:var(--surface);border-radius:24px;padding:32px;width:100%;max-width:460px;box-shadow:0 32px 80px rgba(0,0,0,0.25);max-height:90vh;overflow-y:auto;}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;}
+    .modal-header h3{font-size:18px;font-weight:900;letter-spacing:-0.4px;}
+    .modal-close{width:32px;height:32px;border:none;background:var(--bg);border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:background 0.15s;}
+    .modal-close:hover{background:var(--danger-lt);color:var(--danger);}
+
+    /* NOW SERVING */
+    .now-serving{background:linear-gradient(135deg,var(--ink) 0%,#1e293b 100%);color:white;border-radius:20px;padding:28px;text-align:center;margin-bottom:16px;border:1px solid rgba(255,255,255,0.06);}
+    .ns-label{font-size:11px;font-weight:700;opacity:0.45;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px;}
+    .ns-token{font-size:72px;font-weight:900;line-height:1;letter-spacing:-3px;margin-bottom:6px;}
+    .ns-name{font-size:14px;opacity:0.55;}
+    .next-btn{width:100%;padding:13px;border:none;border-radius:12px;background:var(--success);color:white;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:800;cursor:pointer;transition:transform 0.15s,box-shadow 0.15s,opacity 0.15s;margin-bottom:16px;}
+    .next-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,201,122,0.3);}
+    .next-btn:disabled{opacity:0.5;cursor:not-allowed;}
+
+    /* QR */
+    .qr-preview{display:flex;justify-content:center;margin:12px 0;padding:14px;background:var(--bg);border-radius:10px;}
+
+    /* HOSPITAL CARD in overview */
+    .h-mini{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;margin-bottom:8px;transition:border-color 0.2s;}
+    .h-mini:hover{border-color:rgba(37,99,235,0.25);}
+    .h-avatar{width:38px;height:38px;background:var(--primary-lt);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+    .tag{font-size:11px;padding:2px 8px;border-radius:6px;font-weight:600;background:var(--primary-lt);color:var(--primary);}
+
+    /* CONFIRM modal */
+    .confirm-ico{font-size:40px;text-align:center;margin-bottom:12px;}
+    .confirm-msg{font-size:14px;color:var(--mid);text-align:center;margin-bottom:24px;line-height:1.6;}
+    .confirm-btns{display:flex;gap:10px;}
+    .confirm-btns .btn{flex:1;justify-content:center;}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="h-logo">
+    <div class="h-icon">🛡️</div>
+    <span class="h-title">MediQueue Admin</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span class="admin-tag">⚡ Admin Access</span>
+    <a href="/" class="back-btn">← Home</a>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- ── SIDEBAR ── -->
+  <div class="sidebar">
+    <div class="s-label">Platform</div>
+    <button class="s-btn active" onclick="showPage('p-overview',this)"><span class="ico">📊</span>Overview</button>
+
+    <div class="s-label">Manage</div>
+    <button class="s-btn" onclick="showPage('p-hospitals',this)"><span class="ico">🏥</span>Hospitals</button>
+    <button class="s-btn" onclick="showPage('p-doctors',this)"><span class="ico">👨‍⚕️</span>Doctors</button>
+
+    <div class="s-label">Queue</div>
+    <button class="s-btn" onclick="showPage('p-queue',this)"><span class="ico">🔢</span>Live Queue</button>
+  </div>
+
+  <div class="main">
+
+    <!-- ══════════════════════════════════════════════
+         PAGE: OVERVIEW
+    ═══════════════════════════════════════════════ -->
+    <div id="p-overview" class="page active">
+      <div class="page-header">
+        <div class="page-header-text">
+          <div class="page-title">Overview</div>
+          <div class="page-sub">Platform-wide statistics at a glance</div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-primary btn-sm" onclick="openModal('modal-add-hospital')">🏥 Add Hospital</button>
+          <button class="btn btn-ink btn-sm" onclick="openModal('modal-add-doctor')">👨‍⚕️ Add Doctor</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat-card">
+          <div class="ico-wrap" style="background:var(--primary-lt);">🏥</div>
+          <div class="v" id="ov-hospitals" style="color:var(--primary);">—</div>
+          <div class="l">Total Hospitals</div>
+        </div>
+        <div class="stat-card">
+          <div class="ico-wrap" style="background:var(--success-lt);">👨‍⚕️</div>
+          <div class="v" id="ov-doctors" style="color:var(--success);">—</div>
+          <div class="l">Total Doctors</div>
+        </div>
+        <div class="stat-card">
+          <div class="ico-wrap" style="background:var(--warning-lt);">🪑</div>
+          <div class="v" id="ov-waiting" style="color:var(--warning);">—</div>
+          <div class="l">Waiting Now</div>
+        </div>
+        <div class="stat-card">
+          <div class="ico-wrap" style="background:var(--danger-lt);">🚨</div>
+          <div class="v" id="ov-emergency" style="color:var(--danger);">0</div>
+          <div class="l">Emergency</div>
+        </div>
+      </div>
+
+      <!-- Quick hospital list -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title" style="margin:0;">🏥 Registered Hospitals</div>
+          <button class="btn btn-primary btn-sm" onclick="showPage('p-hospitals', document.querySelectorAll('.s-btn')[1])">View All →</button>
+        </div>
+        <div id="ov-hosp-list"><div class="empty"><div class="e-ico">🏥</div><p>Loading...</p></div></div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         PAGE: MANAGE HOSPITALS
+    ═══════════════════════════════════════════════ -->
+    <div id="p-hospitals" class="page">
+      <div class="page-header">
+        <div class="page-header-text">
+          <div class="page-title">Manage Hospitals</div>
+          <div class="page-sub">Add, edit, or remove hospitals from the MediQueue network</div>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('modal-add-hospital')">+ Add Hospital</button>
+      </div>
+
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="tbl-wrap" style="border:none;border-radius:0;">
+          <table>
+            <thead>
+              <tr>
+                <th>Hospital</th>
+                <th>Address</th>
+                <th>Departments</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="hosp-tbl-body">
+              <tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted);">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         PAGE: MANAGE DOCTORS
+    ═══════════════════════════════════════════════ -->
+    <div id="p-doctors" class="page">
+      <div class="page-header">
+        <div class="page-header-text">
+          <div class="page-title">Manage Doctors</div>
+          <div class="page-sub">Add, edit, or remove doctors across all hospitals</div>
+        </div>
+        <button class="btn btn-ink" onclick="openModal('modal-add-doctor')">+ Add Doctor</button>
+      </div>
+
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="tbl-wrap" style="border:none;border-radius:0;">
+          <table>
+            <thead>
+              <tr>
+                <th>Doctor</th>
+                <th>Department</th>
+                <th>Hospital</th>
+                <th>Avg Time</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="doc-tbl-body">
+              <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         PAGE: LIVE QUEUE
+    ═══════════════════════════════════════════════ -->
+    <div id="p-queue" class="page">
+      <div class="page-title">Live Queue Monitor</div>
+      <div class="page-sub">Monitor and manage any doctor's queue in real time</div>
+
+      <div style="display:flex;gap:20px;align-items:flex-start;">
+
+        <div style="flex:1;">
+          <div class="card">
+            <div class="card-title" style="margin-bottom:12px;">Select Hospital & Doctor</div>
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <select id="q-hosp-sel" onchange="filterQueueDoctors()" style="flex:1;padding:10px 12px;border:1.5px solid rgba(37,99,235,0.12);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;"><option value="">-- Select a hospital --</option></select>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <select id="q-doc-sel" style="flex:1;padding:10px 12px;border:1.5px solid rgba(37,99,235,0.12);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;"><option value="">-- Select a doctor --</option></select>
+              <button class="btn btn-primary btn-sm" onclick="loadQueue()">Load</button>
+            </div>
+            <div id="qr-section" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+              <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;">📷 Cabin QR</div>
+              <div style="display:flex;align-items:center;gap:14px;">
+                <div class="qr-preview" id="qr-inline" style="padding:10px;margin:0;"></div>
+                <div>
+                  <div id="qr-doc-name" style="font-weight:700;font-size:13px;margin-bottom:2px;"></div>
+                  <div id="qr-dept" style="font-size:12px;color:var(--muted);margin-bottom:10px;"></div>
+                  <button class="btn btn-ghost btn-sm" onclick="printQRInline()">🖨️ Print</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="live-pill"><div class="live-dot"></div><span>Live updates enabled</span></div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title" style="margin:0;">🪑 Waiting Queue</div>
+              <span id="q-count" style="font-size:12px;color:var(--muted);font-weight:600;"></span>
+            </div>
+            <div id="q-empty" class="empty"><div class="e-ico">📋</div><p>Select a doctor to view queue</p></div>
+            <div class="tbl-wrap" id="q-table" style="display:none;">
+              <table>
+                <thead><tr><th>#</th><th>Token</th><th>Patient</th><th>Type</th><th>Wait</th></tr></thead>
+                <tbody id="q-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div style="width:250px;flex-shrink:0;">
+          <div class="now-serving">
+            <div class="ns-label">Now Serving</div>
+            <div class="ns-token" id="ns-token">--</div>
+            <div class="ns-name" id="ns-name">No patient yet</div>
+          </div>
+          <button class="next-btn" id="next-btn" onclick="nextPatient()">Next Patient →</button>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+
+<!-- ════════════════════════════════════════════
+     MODAL: ADD HOSPITAL
+════════════════════════════════════════════ -->
+<div class="overlay" id="modal-add-hospital">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🏢 Register Hospital</h3>
+      <button class="modal-close" onclick="closeModal('modal-add-hospital')">✕</button>
+    </div>
+    <div id="h-err" class="alert alert-error" style="display:none;"><span id="h-err-msg"></span></div>
+    <div id="h-ok"  class="alert alert-success" style="display:none;"><span id="h-ok-msg"></span></div>
+    <div class="fg"><label>Hospital Name *</label><input id="hosp-name" placeholder="e.g. Apollo Clinic"/></div>
+    <div class="fg"><label>Address / Location *</label><input id="hosp-addr" placeholder="e.g. Koramangala, Bengaluru"/></div>
+    <div class="fg"><label>Departments <span style="font-weight:400;color:var(--muted);">(comma separated)</span></label><input id="hosp-depts" placeholder="Cardiology, General, Pediatrics"/></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-hospital')">Cancel</button>
+      <button class="btn btn-primary" id="btn-hosp" onclick="addHospital()">Create Hospital →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     MODAL: ADD DOCTOR
+════════════════════════════════════════════ -->
+<div class="overlay" id="modal-add-doctor">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>👨‍⚕️ Register Doctor</h3>
+      <button class="modal-close" onclick="closeModal('modal-add-doctor')">✕</button>
+    </div>
+    <div id="d-err" class="alert alert-error" style="display:none;"><span id="d-err-msg"></span></div>
+    <div id="d-ok"  class="alert alert-success" style="display:none;"><span id="d-ok-msg"></span></div>
+    <div class="fg"><label>Doctor's Name *</label><input id="doc-name" placeholder="e.g. Dr. Sharma"/></div>
+    <div class="fg"><label>Assign to Hospital *</label><select id="doc-hospital" onchange="updateDocDeptOptions()"><option value="">Select Hospital...</option></select></div>
+    <div class="g2">
+      <div class="fg"><label>Department *</label><select id="doc-dept"><option value="">Select Department...</option></select></div>
+      <div class="fg"><label>Avg. Consult Time (mins)</label><input id="doc-time" type="number" value="10" min="1"/></div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-doctor')">Cancel</button>
+      <button class="btn btn-ink" id="btn-doc" onclick="addDoctor()">Register Doctor →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     MODAL: EDIT HOSPITAL
+════════════════════════════════════════════ -->
+<div class="overlay" id="modal-edit-hospital">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ Edit Hospital</h3>
+      <button class="modal-close" onclick="closeModal('modal-edit-hospital')">✕</button>
+    </div>
+    <div id="eh-err" class="alert alert-error" style="display:none;"><span id="eh-err-msg"></span></div>
+    <input type="hidden" id="eh-id"/>
+    <div class="fg"><label>Hospital Name *</label><input id="eh-name" placeholder="Hospital Name"/></div>
+    <div class="fg"><label>Address *</label><input id="eh-addr" placeholder="Address"/></div>
+    <div class="fg"><label>Departments <span style="font-weight:400;color:var(--muted);">(comma separated)</span></label><input id="eh-depts" placeholder="Cardiology, General"/></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
+      <button class="btn btn-ghost" onclick="closeModal('modal-edit-hospital')">Cancel</button>
+      <button class="btn btn-primary" id="btn-eh" onclick="saveHospital()">Save Changes →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     MODAL: EDIT DOCTOR
+════════════════════════════════════════════ -->
+<div class="overlay" id="modal-edit-doctor">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ Edit Doctor</h3>
+      <button class="modal-close" onclick="closeModal('modal-edit-doctor')">✕</button>
+    </div>
+    <div id="ed-err" class="alert alert-error" style="display:none;"><span id="ed-err-msg"></span></div>
+    <input type="hidden" id="ed-id"/>
+    <div class="fg"><label>Doctor Name *</label><input id="ed-name" placeholder="Dr. Name"/></div>
+    <div class="g2">
+      <div class="fg"><label>Department *</label><input id="ed-dept" placeholder="e.g. Cardiology"/></div>
+      <div class="fg"><label>Avg. Consult Time (mins)</label><input id="ed-time" type="number" min="1"/></div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
+      <button class="btn btn-ghost" onclick="closeModal('modal-edit-doctor')">Cancel</button>
+      <button class="btn btn-ink" id="btn-ed" onclick="saveDoctor()">Save Changes →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     MODAL: CONFIRM DELETE
+════════════════════════════════════════════ -->
+<div class="overlay" id="modal-confirm">
+  <div class="modal" style="max-width:360px;text-align:center;">
+    <div class="confirm-ico" id="confirm-ico">⚠️</div>
+    <div class="modal-header" style="justify-content:center;margin-bottom:8px;">
+      <h3 id="confirm-title">Are you sure?</h3>
+    </div>
+    <p class="confirm-msg" id="confirm-msg">This action cannot be undone.</p>
+    <div class="confirm-btns">
+      <button class="btn btn-ghost" onclick="closeModal('modal-confirm')">Cancel</button>
+      <button class="btn btn-danger" id="confirm-ok-btn" onclick="confirmDelete()">Delete →</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  const API = 'https://mediqueue-backend-el5a.onrender.com/api';
+  let socket = null, currentDoctorId = null, allDoctors = [], allHospitals = [];
+  let pendingDelete = null; // { type: 'hospital'|'doctor', id, name }
+
+  // ── INIT ──────────────────────────────────────────
+  window.onload = () => {
+    initSocket();
+    loadOverview();
+  };
+
+  // ── PAGE SWITCHING ─────────────────────────────────
+  function showPage(id, btn) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.s-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    if (id === 'p-overview')  loadOverview();
+    if (id === 'p-hospitals') loadHospitalsTable();
+    if (id === 'p-doctors')   loadDoctorsTable();
+    if (id === 'p-queue')     loadAllDoctorsForQueue();
+  }
+
+  // ── MODAL CONTROL ─────────────────────────────────
+  function openModal(id) {
+    document.getElementById(id).classList.add('show');
+  }
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('show');
+  }
+  // Close on backdrop click
+  document.querySelectorAll('.overlay').forEach(o => {
+    o.addEventListener('click', e => { if (e.target === o) o.classList.remove('show'); });
+  });
+
+  // ── SOCKET ────────────────────────────────────────
+  function initSocket() {
+    socket = io();
+    socket.on('connect', () => console.log('Socket connected'));
+  }
+
+  function subQueue(doctorId) {
+    if (currentDoctorId && currentDoctorId !== doctorId) { 
+       socket.emit('leaveQueue', currentDoctorId); 
+       socket.off(`queue:${currentDoctorId}`); 
+    }
+    socket.off(`queue:${doctorId}`); 
+    
+    currentDoctorId = doctorId;
+    socket.emit('joinQueue', doctorId);
+    socket.on(`queue:${doctorId}`, data => {
+      if (data.type === 'NEXT_PATIENT') { setToken(data.currentToken, data.currentPatient); renderQueue(data.queue); setCount(data.waitingCount); }
+      if (data.type === 'QUEUE_EMPTY')  { setToken(null, 'Queue empty'); renderQueue([]); setCount(0); }
+      if (data.type === 'NEW_APPOINTMENT') loadQueue();
+      if (data.type === 'APPOINTMENT_CANCELLED') loadQueue();
+    });
+  }
+
+  // ── OVERVIEW ──────────────────────────────────────
+  async function loadOverview() {
+    try {
+      const [hRes, dRes] = await Promise.all([fetch(`${API}/hospitals`), fetch(`${API}/doctors`)]);
+      allHospitals = await hRes.json();
+      allDoctors   = await dRes.json();
+      document.getElementById('ov-hospitals').textContent = allHospitals.length;
+      document.getElementById('ov-doctors').textContent   = allDoctors.length;
+      document.getElementById('ov-waiting').textContent   = '—';
+
+      // Populate hospital dropdown for Add Doctor modal
+      const sel = document.getElementById('doc-hospital');
+      sel.innerHTML = '<option value="">Select Hospital...</option>';
+      allHospitals.forEach(h => sel.innerHTML += `<option value="${h._id}">${h.name}</option>`);
+
+      // Mini hospital list in overview
+      const el = document.getElementById('ov-hosp-list');
+      if (!allHospitals.length) { el.innerHTML = '<div class="empty"><div class="e-ico">🏥</div><p>No hospitals registered yet</p></div>'; return; }
+      el.innerHTML = allHospitals.slice(0, 5).map(h => `
+        <div class="h-mini">
+          <div class="h-avatar">🏥</div>
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:13px;">${h.name}</div>
+            <div style="font-size:12px;color:var(--muted);">${h.address}</div>
+          </div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;max-width:180px;">
+            ${(h.departments||[]).slice(0,3).map(d => `<span class="tag">${d}</span>`).join('')}
+          </div>
+        </div>`).join('');
+      if (allHospitals.length > 5) el.innerHTML += `<div style="text-align:center;padding:8px;font-size:12px;color:var(--muted);">+${allHospitals.length - 5} more hospitals</div>`;
+    } catch(e) { console.error(e); }
+  }
+
+  // ── HOSPITALS TABLE ───────────────────────────────
+  async function loadHospitalsTable() {
+    try {
+      const res = await fetch(`${API}/hospitals`);
+      allHospitals = await res.json();
+      const tbody = document.getElementById('hosp-tbl-body');
+      if (!allHospitals.length) {
+        tbody.innerHTML = '<tr><td colspan="4"><div class="empty"><div class="e-ico">🏥</div><p>No hospitals registered yet</p></div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = allHospitals.map(h => `
+        <tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="h-avatar" style="width:32px;height:32px;font-size:14px;">🏥</div>
+              <strong>${h.name}</strong>
+            </div>
+          </td>
+          <td style="color:var(--muted);font-size:12px;">${h.address}</td>
+          <td>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+              ${(h.departments||[]).map(d => `<span class="tag" style="font-size:10px;">${d}</span>`).join('')}
+            </div>
+          </td>
+          <td>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-outline btn-sm" onclick="editHospital('${h._id}','${escQ(h.name)}','${escQ(h.address)}','${escQ((h.departments||[]).join(','))}')">✏️ Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="confirmDeleteHospital('${h._id}','${escQ(h.name)}')">🗑 Delete</button>
+            </div>
+          </td>
+        </tr>`).join('');
+    } catch(e) { console.error(e); }
+  }
+
+  // ── DOCTORS TABLE ─────────────────────────────────
+  async function loadDoctorsTable() {
+    try {
+      const res = await fetch(`${API}/doctors`);
+      allDoctors = await res.json();
+      const tbody = document.getElementById('doc-tbl-body');
+      if (!allDoctors.length) {
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty"><div class="e-ico">🩺</div><p>No doctors registered yet</p></div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = allDoctors.map(d => `
+        <tr>
+          <td><strong>${d.name}</strong></td>
+          <td><span class="badge badge-dept">${d.department}</span></td>
+          <td><span class="badge badge-hosp">${d.hospital?.name||'—'}</span></td>
+          <td style="color:var(--muted);">~${d.avgConsultationTime} min</td>
+          <td>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-outline btn-sm" onclick="editDoctor('${d._id}','${escQ(d.name)}','${escQ(d.department)}','${d.avgConsultationTime}')">✏️ Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="confirmDeleteDoctor('${d._id}','${escQ(d.name)}')">🗑 Delete</button>
+            </div>
+          </td>
+        </tr>`).join('');
+    } catch(e) { console.error(e); }
+  }
+
+  // ── ADD HOSPITAL ──────────────────────────────────
+  async function addHospital() {
+    const btn = document.getElementById('btn-hosp');
+    const name  = document.getElementById('hosp-name').value.trim();
+    const addr  = document.getElementById('hosp-addr').value.trim();
+    const depts = document.getElementById('hosp-depts').value.split(',').map(d=>d.trim()).filter(Boolean);
+    hideA('h-err'); hideA('h-ok');
+    if (!name || !addr) { showA('h-err','Name and address are required'); return; }
+    btn.textContent = 'Creating...'; btn.disabled = true;
+    try {
+      const res  = await fetch(`${API}/hospitals`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, address:addr, departments:depts})});
+      const data = await res.json();
+      if (!res.ok) { showA('h-err', data.message); return; }
+      showA('h-ok', '✅ Hospital created!');
+      ['hosp-name','hosp-addr','hosp-depts'].forEach(id => document.getElementById(id).value = '');
+      toast('Hospital registered!');
+      loadOverview();
+      setTimeout(() => closeModal('modal-add-hospital'), 1200);
+    } catch(e) { showA('h-err', 'Server error. Is backend running?'); }
+    finally { btn.textContent = 'Create Hospital →'; btn.disabled = false; }
+  }
+  
+  function updateDocDeptOptions() {
+    const hospId = document.getElementById('doc-hospital').value;
+    const deptSel = document.getElementById('doc-dept');
+    deptSel.innerHTML = '<option value="">Select Department...</option>';
+    if (!hospId) return;
+    const hosp = allHospitals.find(h => h._id === hospId);
+    if (hosp && hosp.departments) {
+      hosp.departments.forEach(d => {
+        deptSel.innerHTML += `<option value="${escQ(d)}">${escQ(d)}</option>`;
+      });
+    }
+  }
+
+  // ── ADD DOCTOR ────────────────────────────────────
+  async function addDoctor() {
+    const btn  = document.getElementById('btn-doc');
+    const name = document.getElementById('doc-name').value.trim();
+    const hosp = document.getElementById('doc-hospital').value;
+    const dept = document.getElementById('doc-dept').value.trim();
+    const time = document.getElementById('doc-time').value;
+    hideA('d-err'); hideA('d-ok');
+    if (!name || !hosp || !dept) { showA('d-err','Name, hospital and department are required'); return; }
+    btn.textContent = 'Registering...'; btn.disabled = true;
+    try {
+      const res  = await fetch(`${API}/doctors`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, hospital:hosp, department:dept, avgConsultationTime:parseInt(time)||10})});
+      const data = await res.json();
+      if (!res.ok) { showA('d-err', data.message); return; }
+      showA('d-ok', `✅ Dr. ${name} registered!`);
+      ['doc-name','doc-dept'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('doc-hospital').value = '';
+      document.getElementById('doc-time').value = '10';
+      toast('Doctor registered!');
+      setTimeout(() => closeModal('modal-add-doctor'), 1200);
+    } catch(e) { showA('d-err', 'Server error.'); }
+    finally { btn.textContent = 'Register Doctor →'; btn.disabled = false; }
+  }
+
+  // ── EDIT HOSPITAL ─────────────────────────────────
+  function editHospital(id, name, addr, depts) {
+    document.getElementById('eh-id').value   = id;
+    document.getElementById('eh-name').value = name;
+    document.getElementById('eh-addr').value = addr;
+    document.getElementById('eh-depts').value = depts;
+    hideA('eh-err');
+    openModal('modal-edit-hospital');
+  }
+
+  async function saveHospital() {
+    const btn  = document.getElementById('btn-eh');
+    const id   = document.getElementById('eh-id').value;
+    const name = document.getElementById('eh-name').value.trim();
+    const addr = document.getElementById('eh-addr').value.trim();
+    const depts = document.getElementById('eh-depts').value.split(',').map(d=>d.trim()).filter(Boolean);
+    hideA('eh-err');
+    if (!name || !addr) { showA('eh-err','Name and address are required'); return; }
+    btn.textContent = 'Saving...'; btn.disabled = true;
+    try {
+      const res = await fetch(`${API}/hospitals/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, address:addr, departments:depts})});
+      const data = await res.json();
+      if (!res.ok) { showA('eh-err', data.message); return; }
+      toast('Hospital updated!');
+      closeModal('modal-edit-hospital');
+      loadHospitalsTable();
+      loadOverview();
+    } catch(e) { showA('eh-err','Server error.'); }
+    finally { btn.textContent = 'Save Changes →'; btn.disabled = false; }
+  }
+
+  // ── EDIT DOCTOR ───────────────────────────────────
+  function editDoctor(id, name, dept, time) {
+    document.getElementById('ed-id').value   = id;
+    document.getElementById('ed-name').value = name;
+    document.getElementById('ed-dept').value = dept;
+    document.getElementById('ed-time').value = time;
+    hideA('ed-err');
+    openModal('modal-edit-doctor');
+  }
+
+  async function saveDoctor() {
+    const btn  = document.getElementById('btn-ed');
+    const id   = document.getElementById('ed-id').value;
+    const name = document.getElementById('ed-name').value.trim();
+    const dept = document.getElementById('ed-dept').value.trim();
+    const time = document.getElementById('ed-time').value;
+    hideA('ed-err');
+    if (!name || !dept) { showA('ed-err','Name and department are required'); return; }
+    btn.textContent = 'Saving...'; btn.disabled = true;
+    try {
+      const res = await fetch(`${API}/doctors/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, department:dept, avgConsultationTime:parseInt(time)||10})});
+      const data = await res.json();
+      if (!res.ok) { showA('ed-err', data.message); return; }
+      toast('Doctor updated!');
+      closeModal('modal-edit-doctor');
+      loadDoctorsTable();
+    } catch(e) { showA('ed-err','Server error.'); }
+    finally { btn.textContent = 'Save Changes →'; btn.disabled = false; }
+  }
+
+  // ── DELETE FLOW ───────────────────────────────────
+  function confirmDeleteHospital(id, name) {
+    pendingDelete = { type: 'hospital', id, name };
+    document.getElementById('confirm-ico').textContent = '🏥';
+    document.getElementById('confirm-title').textContent = 'Delete Hospital?';
+    document.getElementById('confirm-msg').textContent = `"${name}" and all its doctors will be permanently removed. This cannot be undone.`;
+    openModal('modal-confirm');
+  }
+
+  function confirmDeleteDoctor(id, name) {
+    pendingDelete = { type: 'doctor', id, name };
+    document.getElementById('confirm-ico').textContent = '👨‍⚕️';
+    document.getElementById('confirm-title').textContent = 'Delete Doctor?';
+    document.getElementById('confirm-msg').textContent = `Dr. ${name} will be permanently removed from the platform.`;
+    openModal('modal-confirm');
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    const { type, id, name } = pendingDelete;
+    const btn = document.getElementById('confirm-ok-btn');
+    btn.textContent = 'Deleting...'; btn.disabled = true;
+    try {
+      const url = type === 'hospital' ? `${API}/hospitals/${id}` : `${API}/doctors/${id}`;
+      const res = await fetch(url, { method: 'DELETE' });
+      if (!res.ok) { toast('Delete failed', true); return; }
+      toast(`${type === 'hospital' ? name : `Dr. ${name}`} deleted`);
+      closeModal('modal-confirm');
+      pendingDelete = null;
+      if (type === 'hospital') { loadHospitalsTable(); loadOverview(); }
+      else                     { loadDoctorsTable(); }
+    } catch(e) { toast('Server error', true); }
+    finally { btn.textContent = 'Delete →'; btn.disabled = false; }
+  }
+
+  // ── QUEUE ─────────────────────────────────────────
+  async function loadAllDoctorsForQueue() {
+    try {
+      const [hRes, dRes] = await Promise.all([fetch(`${API}/hospitals`), fetch(`${API}/doctors`)]);
+      allHospitals = await hRes.json();
+      allDoctors = await dRes.json();
+
+      const selH = document.getElementById('q-hosp-sel');
+      selH.innerHTML = '<option value="">-- Select hospital --</option>';
+      allHospitals.forEach(h => selH.innerHTML += `<option value="${h._id}">${h.name}</option>`);
+
+      const selD = document.getElementById('q-doc-sel');
+      selD.innerHTML = '<option value="">-- Select doctor --</option>';
+    } catch(e) { console.error(e); }
+  }
+
+  function filterQueueDoctors() {
+    const hId = document.getElementById('q-hosp-sel').value;
+    const selD = document.getElementById('q-doc-sel');
+    selD.innerHTML = '<option value="">-- Select doctor --</option>';
+    if (!hId) return;
+
+    const filtered = allDoctors.filter(d => (d.hospital && typeof d.hospital === 'object' ? d.hospital._id : d.hospital) === hId);
+    filtered.forEach(d => selD.innerHTML += `<option value="${d._id}">${d.name} — ${d.department}</option>`);
+  }
+
+  async function loadQueue() {
+    const id = document.getElementById('q-doc-sel').value;
+    if (!id) return;
+    currentDoctorId = id;
+    subQueue(id);
+    generateQR(id);
+    try {
+      const res  = await fetch(`${API}/queue/${id}`);
+      const data = await res.json();
+      setToken(data.currentToken, data.currentPatient);
+      renderQueue(data.queue || []);
+      setCount(data.waitingCount || 0);
+    } catch(e) { console.error(e); }
+  }
+
+  async function nextPatient() {
+    if (!currentDoctorId) return;
+    const btn = document.getElementById('next-btn');
+    btn.disabled = true; btn.textContent = 'Loading...';
+    try { await fetch(`${API}/queue/${currentDoctorId}/next`, {method:'POST', headers:{'Content-Type':'application/json'}}); }
+    catch(e) { console.error(e); }
+    btn.disabled = false; btn.textContent = 'Next Patient →';
+  }
+
+  function setToken(num, name) {
+    document.getElementById('ns-token').textContent = num ? `#${num}` : '--';
+    document.getElementById('ns-name').textContent  = name || 'No patient yet';
+  }
+  function setCount(c) { document.getElementById('q-count').textContent = `${c} patient${c!==1?'s':''} waiting`; }
+
+  function renderQueue(queue) {
+    const tbody = document.getElementById('q-body');
+    const empty = document.getElementById('q-empty');
+    const wrap  = document.getElementById('q-table');
+    tbody.innerHTML = '';
+    if (!queue.length) { wrap.style.display='none'; empty.style.display='block'; empty.innerHTML='<div class="e-ico">🪑</div><p>No patients waiting</p>'; return; }
+    wrap.style.display='block'; empty.style.display='none';
+    queue.forEach(item => {
+      tbody.innerHTML += `<tr>
+        <td style="color:var(--muted);">${item.position}</td>
+        <td><strong>#${item.tokenNumber}</strong></td>
+        <td>${item.patientName}</td>
+        <td><span class="badge badge-${item.type==='emergency'?'em':'no'}">${item.type}</span></td>
+        <td style="color:var(--muted);">${item.estimatedWaitTime}m</td>
+      </tr>`;
+    });
+  }
+
+  // ── QR ────────────────────────────────────────────
+  function generateQR(doctorId) {
+    const el = document.getElementById('qr-inline');
+    el.innerHTML = '';
+    const doc = allDoctors.find(d => d._id === doctorId);
+    if (doc) {
+      document.getElementById('qr-doc-name').textContent = doc.name;
+      document.getElementById('qr-dept').textContent     = doc.department;
+    }
+    new QRCode(el, { text:`mediqueue://book?doctorId=${doctorId}`, width:100, height:100, colorDark:'#0F172A', colorLight:'#F0F4FF', correctLevel:QRCode.CorrectLevel.H });
+    document.getElementById('qr-section').style.display = 'block';
+  }
+
+  function printQRInline() {
+    const img  = document.getElementById('qr-inline').querySelector('img');
+    const name = document.getElementById('qr-doc-name').textContent;
+    const dept = document.getElementById('qr-dept').textContent;
+    const win  = window.open('');
+    win.document.write(`<html><body style="text-align:center;padding:48px;font-family:sans-serif;">
+      <h2 style="color:#2563EB;">MediQueue</h2>
+      <h3>${name}</h3><p style="color:#64748B;">${dept}</p>
+      <img src="${img?.src||''}" style="width:240px;height:240px;margin:20px 0;border-radius:12px;border:1px solid #E2E8F0;"/>
+      <p style="font-size:13px;color:#94A3B8;">Scan to book your appointment</p>
+    </body></html>`);
+    win.print();
+  }
+
+  // ── HELPERS ───────────────────────────────────────
+  function showA(id, msg) { const el=document.getElementById(id); el.style.display='flex'; document.getElementById(`${id}-msg`).textContent=msg; }
+  function hideA(id)      { document.getElementById(id).style.display='none'; }
+  function toast(msg, danger=false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show' + (danger ? ' toast-danger' : '');
+    setTimeout(() => t.className = '', 3000);
+  }
+  function escQ(str) { return String(str||'').replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
+</script>
+
+</body>
+</html>
