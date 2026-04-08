@@ -501,7 +501,7 @@
 <div id="toast"></div>
 
 <script>
-  const API = 'http://localhost:5000/api';
+  const API = 'https://mediqueue-backend-el5a.onrender.com/api';
   let hospitalId = null, hospitalName = '', hospitalToken = null;
   let socket = null, currentDoctorId = null, allDoctors = [];
   let hospitalDepartments = [];
@@ -628,7 +628,7 @@
 
   // ── SOCKET ────────────────────────────────────────
   function initSocket() {
-    socket = io('http://localhost:5000');
+    socket = io('wss://mediqueue-backend-el5a.onrender.com', { transports: ['websocket'] });
     socket.on('connect', () => console.log('Socket connected'));
   }
 

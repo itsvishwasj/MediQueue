@@ -507,7 +507,7 @@
 
   // ── SOCKET ────────────────────────────────────────
   function initSocket() {
-    socket = io();
+    socket = io('wss://mediqueue-backend-el5a.onrender.com', { transports: ['websocket'] });
     socket.on('connect', () => console.log('Socket connected'));
   }
 
@@ -891,3 +891,4 @@
 
 </body>
 </html>
+
