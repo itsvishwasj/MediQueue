@@ -1,10 +1,6 @@
----
-
 # MediQueue: AI-Powered Symptom Triage & Live Queue Management (Hackathon Project)
 
 **MediQueue** is a full-stack healthcare solution designed to reduce hospital overcrowding and streamline the patient experience. By leveraging **Google Gemini AI** for intelligent symptom triage and providing **Real-time Queue Status**, MediQueue ensures patients get to the right specialist without the wait.
-
----
 
 ## 🚀 Key Features
 
