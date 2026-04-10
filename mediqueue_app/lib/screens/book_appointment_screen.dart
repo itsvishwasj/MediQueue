@@ -303,12 +303,14 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
   String? _selectedSlot;
   String? _pendingPreselectedHospital;
   String? _pendingPreselectedDepartment;
+  late final bool _isHospitalFirstFlow;
 
   // Real Database Lists
   List<String> _allDepartmentList = [];
   List<HospitalModel> _filteredHospitalList = [];
   List<HospitalModel> _allHospitalList = [];
   List<DoctorModel> _doctorList = [];
+  List<String> _hospitalDepartmentList = [];
 
   // Live Queue Insight Variables
   int waitingCount = 0;
@@ -327,6 +329,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
     
     _pendingPreselectedHospital = widget.preSelectedHospital;
     _pendingPreselectedDepartment = widget.preSelectedDepartment;
+    _isHospitalFirstFlow = (widget.preSelectedHospital != null && widget.preSelectedHospital!.trim().isNotEmpty);
     _loadAllDepartments(); // Load all departments first
     _animController = AnimationController(
       vsync: this,
@@ -450,10 +453,11 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
 
   Future<void> _loadDepartmentsForHospital(String hospitalId) async {
     try {
-      await HospitalService.getDepartments(hospitalId);
-      // This is used for pre-selected hospital logic
+      final depts = await HospitalService.getDepartments(hospitalId);
+      setState(() => _hospitalDepartmentList = depts);
     } catch (e) {
       debugPrint("Error loading departments for hospital: $e");
+      setState(() => _hospitalDepartmentList = []);
     }
   }
 
@@ -542,48 +546,92 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
                   _buildInfoCard(),
                   const SizedBox(height: 24),
 
-                  _label('Select Department'),
-                  const SizedBox(height: 8),
-                  _buildDropdown(
-                    'Department', 
-                    department,
-                    _allDepartmentList,
-                    Icons.medical_services_outlined,
-                    (v) {
-                      setState(() {
-                        department = v;
-                        hospital = null;
-                        doctor = null;
-                        _filteredHospitalList = [];
-                        _doctorList = [];
-                      });
-                      if (v != null) {
-                        _filterHospitalsByDepartment(v);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 18),
-
-                  _label('Select Hospital'),
-                  const SizedBox(height: 8),
-                  _buildDropdown(
-                    'Hospital', 
-                    hospital,
-                    _filteredHospitalList.map((h) => h.name).toList(),
-                    Icons.local_hospital_outlined,
-                    (v) {
-                      setState(() {
-                        hospital = v;
-                        doctor = null;
-                        _doctorList = [];
-                      });
-                      if (v != null && department != null) {
-                        final hId = _filteredHospitalList.firstWhere((h) => h.name == v).id;
-                        _loadDoctors(hId, department!);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 18),
+                  if (_isHospitalFirstFlow) ...[
+                    _label('Select Hospital'),
+                    const SizedBox(height: 8),
+                    _buildDropdown(
+                      'Hospital',
+                      hospital,
+                      _allHospitalList.map((h) => h.name).toList(),
+                      Icons.local_hospital_outlined,
+                      (v) async {
+                        setState(() {
+                          hospital = v;
+                          department = null;
+                          doctor = null;
+                          _doctorList = [];
+                          _hospitalDepartmentList = [];
+                        });
+                        if (v != null) {
+                          final hId = _allHospitalList.firstWhere((h) => h.name == v).id;
+                          await _loadDepartmentsForHospital(hId);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    _label('Select Department'),
+                    const SizedBox(height: 8),
+                    _buildDropdown(
+                      'Department',
+                      department,
+                      _hospitalDepartmentList,
+                      Icons.medical_services_outlined,
+                      (v) {
+                        setState(() {
+                          department = v;
+                          doctor = null;
+                          _doctorList = [];
+                        });
+                        if (v != null && hospital != null) {
+                          final hId = _allHospitalList.firstWhere((h) => h.name == hospital).id;
+                          _loadDoctors(hId, v);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                  ] else ...[
+                    _label('Select Department'),
+                    const SizedBox(height: 8),
+                    _buildDropdown(
+                      'Department',
+                      department,
+                      _allDepartmentList,
+                      Icons.medical_services_outlined,
+                      (v) {
+                        setState(() {
+                          department = v;
+                          hospital = null;
+                          doctor = null;
+                          _filteredHospitalList = [];
+                          _doctorList = [];
+                        });
+                        if (v != null) {
+                          _filterHospitalsByDepartment(v);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    _label('Select Hospital'),
+                    const SizedBox(height: 8),
+                    _buildDropdown(
+                      'Hospital',
+                      hospital,
+                      _filteredHospitalList.map((h) => h.name).toList(),
+                      Icons.local_hospital_outlined,
+                      (v) {
+                        setState(() {
+                          hospital = v;
+                          doctor = null;
+                          _doctorList = [];
+                        });
+                        if (v != null && department != null) {
+                          final hId = _filteredHospitalList.firstWhere((h) => h.name == v).id;
+                          _loadDoctors(hId, department!);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                  ],
 
                   _label('Select Doctor'),
                   const SizedBox(height: 8),
@@ -1013,7 +1061,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
 
     try {
       // Look up the exact IDs required by the Node.js backend
-      final hId = _filteredHospitalList.firstWhere((h) => h.name == hospital).id;
+      final hId = _allHospitalList.firstWhere((h) => h.name == hospital).id;
       final dId = _doctorList.firstWhere((d) => d.name == doctor).id;
 
       final appointment = await AppointmentService.bookAppointment(

@@ -23,6 +23,10 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  // Prevent stale 304-driven UI states for dynamic API payloads.
+  if (req.path.startsWith('/api/')) {
+    res.header('Cache-Control', 'no-store');
+  }
   next();
 });
 app.use(express.json());
@@ -36,6 +40,7 @@ app.get('/', (req, res) => {
 // Routes (we'll fill these in coming steps)
 app.use('/api/auth',         require('./src/routes/auth'));
 app.use('/api/hospitals',    require('./src/routes/hospitals'));
+app.use('/api/hospital-details', require('./src/routes/hospitalDetails'));
 app.use('/api/doctors',      require('./src/routes/doctors'));
 app.use('/api/appointments', require('./src/routes/appointments'));
 app.use('/api/queue',        require('./src/routes/queue'));
