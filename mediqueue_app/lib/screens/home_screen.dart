@@ -383,6 +383,41 @@ Future<void> _runTriage(String text) async {
     _expandController.reverse();
   }
 
+  Future<void> _triggerEmergencySOS(BuildContext context) async {
+    // Show immediate visual feedback
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("🚨 SOS Triggered! Alerting nearest hospital..."), backgroundColor: Colors.red),
+    );
+
+    // Send the emergency payload to your backend
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/emergency'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'patientName': _user?.name ?? 'Emergency Patient (Unknown)',
+          'timestamp': DateTime.now().toIso8601String(),
+          'status': 'CRITICAL',
+        }),
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text("🚑 Emergency Sent"),
+            content: const Text("The nearest ER has been notified. Please proceed immediately."),
+            actions: [
+              TextButton(child: const Text("OK"), onPressed: () => Navigator.of(ctx).pop())
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("SOS Error: $e");
+    }
+  }
+
   // ── Build ─────────────────────────────────────────────────────────
 
   @override
@@ -390,6 +425,12 @@ Future<void> _runTriage(String text) async {
     return Scaffold(
       backgroundColor: _bg,
       resizeToAvoidBottomInset: false,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _triggerEmergencySOS(context),
+        backgroundColor: Colors.red[800],
+        icon: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 30),
+        label: const Text("EMERGENCY SOS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnim,

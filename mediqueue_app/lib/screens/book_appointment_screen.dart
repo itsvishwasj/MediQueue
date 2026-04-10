@@ -10,6 +10,7 @@ import '../models/doctor.dart';
 import '../services/appointment_service.dart';
 import '../services/auth_service.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import '../widgets/hospital_card.dart';
 
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 const _primary = Color(0xFF2563EB);
@@ -568,6 +569,19 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
                         }
                       },
                     ),
+                    if (hospital != null) ...[
+                      const SizedBox(height: 12),
+                      Builder(builder: (ctx) {
+                        final h = _allHospitalList.firstWhere((e) => e.name == hospital);
+                        return HospitalCard(
+                          hospitalName: h.name,
+                          hospitalLat: h.hospitalLat,
+                          hospitalLon: h.hospitalLon,
+                          currentQueueWait: 30, // Default estimated wait for hospital
+                          onTap: () {},
+                        );
+                      }),
+                    ],
                     const SizedBox(height: 18),
                     _label('Select Department'),
                     const SizedBox(height: 8),
@@ -630,6 +644,19 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
                         }
                       },
                     ),
+                    if (hospital != null) ...[
+                      const SizedBox(height: 12),
+                      Builder(builder: (ctx) {
+                        final h = _allHospitalList.firstWhere((e) => e.name == hospital);
+                        return HospitalCard(
+                          hospitalName: h.name,
+                          hospitalLat: h.hospitalLat,
+                          hospitalLon: h.hospitalLon,
+                          currentQueueWait: 30, // Default estimated wait for hospital
+                          onTap: () {},
+                        );
+                      }),
+                    ],
                     const SizedBox(height: 18),
                   ],
 

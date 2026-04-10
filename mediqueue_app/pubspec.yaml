@@ -34,6 +34,9 @@ dependencies:
   # HTTP requests
   http: ^1.2.1
 
+  # Geolocation
+  geolocator: ^11.0.1
+
   # Socket.io for real-time queue
   socket_io_client: ^3.1.4
 

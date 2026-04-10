@@ -2,12 +2,26 @@ const router = require('express').Router();
 const Hospital = require('../models/Hospital');
 const QRCode = require('qrcode');
 const Doctor = require('../models/Doctor');
+const { extractCoordinatesFromGoogleMapsLink } = require('../utils/googleMaps');
 
 // POST /api/hospitals
 router.post('/', async (req, res) => {
   try {
-    const { name, address, departments } = req.body;
-    const hospital = new Hospital({ name, address, departments });
+    const { name, address, googleMapsLink, departments } = req.body;
+    const { mapsLink, location } = await extractCoordinatesFromGoogleMapsLink(googleMapsLink || address);
+    if (!mapsLink) {
+      return res.status(400).json({ message: 'Google Maps link is required' });
+    }
+    if (!location) {
+      return res.status(400).json({ message: 'Enter a valid Google Maps link with coordinates' });
+    }
+    const hospital = new Hospital({
+      name,
+      address: mapsLink,
+      fullAddress: mapsLink,
+      departments,
+      location: location || undefined,
+    });
     await hospital.save();
     res.status(201).json(hospital);
   } catch (err) {
@@ -50,10 +64,21 @@ router.get('/:id/departments', async (req, res) => {
 // PUT /api/hospitals/:id - Edit hospital profile
 router.put('/:id', async (req, res) => {
   try {
-    const { name, address, departments } = req.body;
+    const { name, address, googleMapsLink, departments } = req.body;
     const update = {};
     if (name) update.name = name;
-    if (address) update.address = address;
+    if (googleMapsLink || address) {
+      const { mapsLink, location } = await extractCoordinatesFromGoogleMapsLink(googleMapsLink || address);
+      if (!mapsLink) {
+        return res.status(400).json({ message: 'Google Maps link is required' });
+      }
+      if (!location) {
+        return res.status(400).json({ message: 'Enter a valid Google Maps link with coordinates' });
+      }
+      update.address = mapsLink;
+      update.fullAddress = mapsLink;
+      update.location = location;
+    }
     if (departments) update.departments = Array.isArray(departments) 
         ? departments : departments.split(',').map(d => d.trim()).filter(Boolean);
  

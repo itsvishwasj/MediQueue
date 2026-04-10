@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Hospital = require('../models/Hospital');
 const HospitalProfile = require('../models/HospitalProfile');
+const { extractCoordinatesFromGoogleMapsLink } = require('../utils/googleMaps');
 
 // Register
 router.post('/register', async (req, res) => {
@@ -96,6 +97,7 @@ router.post('/register/hospital', async (req, res) => {
       phone,
       // Hospital details
       hospitalName,
+      googleMapsLink,
       address,
       departments
     } = req.body;
@@ -111,6 +113,14 @@ router.post('/register/hospital', async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    const { mapsLink, location } = await extractCoordinatesFromGoogleMapsLink(googleMapsLink || address);
+    if (!mapsLink) {
+      return res.status(400).json({ message: 'Google Maps link is required' });
+    }
+    if (!location) {
+      return res.status(400).json({ message: 'Enter a valid Google Maps link with coordinates' });
+    }
+
     // Create user account with hospital role
     const user = new User({
       name: hospitalName,
@@ -124,7 +134,9 @@ router.post('/register/hospital', async (req, res) => {
     // Create hospital document
     const hospital = new Hospital({
       name: hospitalName,
-      address,
+      address: mapsLink,
+      fullAddress: mapsLink,
+      location: location || undefined,
       departments: departments || []
     });
     await hospital.save();
