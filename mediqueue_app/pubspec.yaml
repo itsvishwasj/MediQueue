@@ -51,7 +51,6 @@ dependencies:
 
   # Easy navigation
   go_router: ^13.2.0
-  geolocator: ^14.0.2
 
   # Speech-to-text recognition
   speech_to_text: ^7.3.0

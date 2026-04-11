@@ -427,6 +427,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
         return a.distanceInKm!.compareTo(b.distanceInKm!);
       });
     });
+  }
 
   void _handlePreSelectedDepartment(String dept) {
     // Normalize the department name for matching
