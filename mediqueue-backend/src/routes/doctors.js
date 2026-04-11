@@ -19,12 +19,23 @@ router.post('/', async (req, res) => {
 // GET /api/doctors - Get doctors
 router.get('/', async (req, res) => {
   try {
-    const { hospitalId, department } = req.query;
+    const { hospitalId, hospital, department } = req.query;
     const filter = {};
-    if (hospitalId) filter.hospital = hospitalId;
+    // Support both hospitalId and hospital query keys for compatibility.
+    if (hospitalId || hospital) filter.hospital = hospitalId || hospital;
     if (department) filter.department = department;
 
     const doctors = await Doctor.find(filter).populate('hospital', 'name');
+    res.json(doctors);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/doctors/hospital/:hospitalId - Compatibility endpoint
+router.get('/hospital/:hospitalId', async (req, res) => {
+  try {
+    const doctors = await Doctor.find({ hospital: req.params.hospitalId }).populate('hospital', 'name');
     res.json(doctors);
   } catch (err) {
     res.status(500).json({ message: err.message });

@@ -34,8 +34,11 @@ dependencies:
   # HTTP requests
   http: ^1.2.1
 
+  # Geolocation
+  geolocator: ^11.0.1
+
   # Socket.io for real-time queue
-  socket_io_client: ^2.0.3+1
+  socket_io_client: ^3.1.4
 
   # Local storage (save token, user info)
   shared_preferences: ^2.2.3
@@ -50,9 +53,13 @@ dependencies:
   go_router: ^13.2.0
   geolocator: ^14.0.2
 
+  # Speech-to-text recognition
+  speech_to_text: ^7.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: "^0.13.1"
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -71,6 +78,8 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  assets:
+    - assets/images/icon.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -102,3 +111,10 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/icon.png"

@@ -30,8 +30,23 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json());
-// Serve admin dashboard
-app.use(express.static('public'));
+// Serve portal pages without caching stale HTML.
+app.use(express.static('public', {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res, filePath) => {
+    if (path.extname(filePath).toLowerCase() === '.html') {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Surrogate-Control', 'no-store');
+    }
+  }
+}));
+
+app.get('/', (req, res) => {
+  res.status(200).send('MediQueue Backend is Live and Healthy!');
+});
 
 app.get('/', (req, res) => {
   res.status(200).send('MediQueue Backend is Live and Healthy!');
@@ -40,9 +55,12 @@ app.get('/', (req, res) => {
 // Routes (we'll fill these in coming steps)
 app.use('/api/auth',         require('./src/routes/auth'));
 app.use('/api/hospitals',    require('./src/routes/hospitals'));
+app.use('/api/hospital-details', require('./src/routes/hospitalDetails'));
 app.use('/api/doctors',      require('./src/routes/doctors'));
 app.use('/api/appointments', require('./src/routes/appointments'));
 app.use('/api/queue',        require('./src/routes/queue'));
+app.use('/api/ai', require('./src/routes/ai'));
+app.use('/api/emergency', require('./src/routes/emergency'));
 
 // Make io accessible in routes
 app.set('io', io);
@@ -56,3 +74,4 @@ require('./src/socket/queueSocket')(io);
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
 });
+

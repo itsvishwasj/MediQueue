@@ -2,9 +2,12 @@ class HospitalModel {
   final String id;
   final String name;
   final String address;
+  final String fullAddress;
   final List<String> departments;
   final double? latitude;
   final double? longitude;
+  final double hospitalLat;
+  final double hospitalLon;
   double? distanceInKm;
 
   HospitalModel({
@@ -14,6 +17,9 @@ class HospitalModel {
     required this.departments,
     this.latitude,
     this.longitude,
+    this.hospitalLat = 0.0,
+    this.hospitalLon = 0.0,
+    this.fullAddress = '',
     this.distanceInKm,
   });
 
@@ -33,9 +39,12 @@ class HospitalModel {
       id: json['_id'],
       name: json['name'] ?? '',
       address: json['address'] ?? '',
+      fullAddress: json['fullAddress'] ?? '',
       departments: List<String>.from(json['departments'] ?? []),
       latitude: lat,
       longitude: lon,
+      hospitalLat: lat ?? 0.0,
+      hospitalLon: lon ?? 0.0,
     );
   }
 }

@@ -16,18 +16,26 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
+  String? _preSelectedDepartment;
 
-  // ✅ IMPORTANT: removed const here
-  late final List<Widget> _screens = [
+  // Create _screens as a getter to always have the updated preSelectedDepartment
+  List<Widget> get _screens => [
     HomeScreen(onNavigate: navigateTo),
-    BookAppointmentScreen(),
+    BookAppointmentScreen(preSelectedDepartment: _preSelectedDepartment),
     MyAppointmentsScreen(),
     QueueScreen(),
     QrScannerScreen(),
   ];
 
-  void navigateTo(int index) {
-    setState(() => _currentIndex = index);
+  void navigateTo(int index, {String? department}) {
+    debugPrint('🔀 [NAV] Navigate to index: $index, department: $department');
+    setState(() {
+      _currentIndex = index;
+      if (department != null) {
+        debugPrint('✅ [NAV] Setting preSelectedDepartment to: $department');
+        _preSelectedDepartment = department;
+      }
+    });
   }
 
   @override

@@ -11,6 +11,7 @@ import '../services/appointment_service.dart';
 import '../services/auth_service.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import '../widgets/hospital_card.dart';
 
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 const _primary = Color(0xFF2563EB);
@@ -282,8 +283,13 @@ class _TokenScreenState extends State<TokenScreen> {
 // ─── BOOK APPOINTMENT SCREEN ─────────────────────────────────────────────────
 class BookAppointmentScreen extends StatefulWidget {
   final String? preSelectedHospital;
+  final String? preSelectedDepartment;
 
-  const BookAppointmentScreen({super.key, this.preSelectedHospital});
+  const BookAppointmentScreen({
+    super.key, 
+    this.preSelectedHospital,
+    this.preSelectedDepartment,
+  });
 
   @override
   State<BookAppointmentScreen> createState() => _BookAppointmentScreenState();
@@ -291,19 +297,23 @@ class BookAppointmentScreen extends StatefulWidget {
 
 class _BookAppointmentScreenState extends State<BookAppointmentScreen>
     with SingleTickerProviderStateMixin {
-  String? hospital;
   String? department;
+  String? hospital;
   String? doctor;
   bool isBooking = false;
   bool _isScheduled = false;
   String? _selectedSlot;
   String? _pendingPreselectedHospital;
   Position? _userPosition;
+  String? _pendingPreselectedDepartment;
+  late final bool _isHospitalFirstFlow;
 
   // Real Database Lists
-  List<HospitalModel> _hospitalList = [];
-  List<String> _departmentList = [];
+  List<String> _allDepartmentList = [];
+  List<HospitalModel> _filteredHospitalList = [];
+  List<HospitalModel> _allHospitalList = [];
   List<DoctorModel> _doctorList = [];
+  List<String> _hospitalDepartmentList = [];
 
   // Live Queue Insight Variables
   int waitingCount = 0;
@@ -316,8 +326,14 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
   @override
   void initState() {
     super.initState();
+    debugPrint('📄 [BOOKING] BookAppointmentScreen initiated');
+    debugPrint('📄 [BOOKING] preSelectedDepartment: ${widget.preSelectedDepartment}');
+    debugPrint('📄 [BOOKING] preSelectedHospital: ${widget.preSelectedHospital}');
+    
     _pendingPreselectedHospital = widget.preSelectedHospital;
-    _loadHospitals(); // Fetch data from backend
+    _pendingPreselectedDepartment = widget.preSelectedDepartment;
+    _isHospitalFirstFlow = (widget.preSelectedHospital != null && widget.preSelectedHospital!.trim().isNotEmpty);
+    _loadAllDepartments(); // Load all departments first
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -326,19 +342,43 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
     _animController.forward();
   }
 
-  Future<void> _loadHospitals() async {
+  Future<void> _loadAllDepartments() async {
     try {
+      debugPrint('📡 [BOOKING] Loading all departments...');
       final hospitals = await HospitalService.getHospitals();
-      setState(() => _hospitalList = hospitals);
-      if (_pendingPreselectedHospital != null && _hospitalList.isNotEmpty) {
+      debugPrint('🏥 [BOOKING] Got ${hospitals.length} hospitals');
+      
+      setState(() => _allHospitalList = hospitals);
+
+      // Collect all unique departments from all hospitals
+      final Set<String> allDepts = {};
+      for (final hospital in hospitals) {
+        final depts = await HospitalService.getDepartments(hospital.id);
+        allDepts.addAll(depts);
+        debugPrint('  - ${hospital.name}: $depts');
+      }
+      debugPrint('📂 [BOOKING] All departments collected: $allDepts');
+      
+      setState(() => _allDepartmentList = allDepts.toList()..sort());
+
+      // Handle pre-selected department first if available
+      if (_pendingPreselectedDepartment != null && _allDepartmentList.isNotEmpty) {
+        debugPrint('🎯 [BOOKING] Handling pre-selected department: $_pendingPreselectedDepartment');
+        _handlePreSelectedDepartment(_pendingPreselectedDepartment!);
+        _pendingPreselectedDepartment = null;
+      } else if (_pendingPreselectedHospital != null && _allHospitalList.isNotEmpty) {
+        debugPrint('🏥 [BOOKING] Handling pre-selected hospital: $_pendingPreselectedHospital');
         _handlePreSelectedHospital(_pendingPreselectedHospital!);
         _pendingPreselectedHospital = null;
+      } else {
+        debugPrint('ℹ️  [BOOKING] No pre-selected department or hospital');
       }
       _determinePositionAndSort();
     } catch (e) {
-      debugPrint("Error loading hospitals: $e");
+      debugPrint("❌ [BOOKING] Error loading departments: $e");
     }
   }
+
 
   Future<void> _determinePositionAndSort() async {
     bool serviceEnabled;
@@ -387,34 +427,112 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
         return a.distanceInKm!.compareTo(b.distanceInKm!);
       });
     });
+
+  void _handlePreSelectedDepartment(String dept) {
+    // Normalize the department name for matching
+    final normalizedDept = dept.trim();
+    final fallbackGeneralDept = _resolveGeneralMedicineDepartment();
+    
+    // Try to find exact match first (case-insensitive)
+    final matchingDept = _allDepartmentList.firstWhere(
+      (d) => d.toLowerCase() == normalizedDept.toLowerCase(),
+      orElse: () => '',
+    );
+    
+    if (matchingDept.isNotEmpty) {
+      debugPrint('✓ Department matched: $matchingDept');
+      setState(() {
+        department = matchingDept;
+        hospital = null;
+        doctor = null;
+        _filteredHospitalList = [];
+        _doctorList = [];
+      });
+      // Filter hospitals by this department
+      _filterHospitalsByDepartment(matchingDept);
+    } else {
+      final resolvedDept = fallbackGeneralDept ?? normalizedDept;
+      debugPrint(
+        '⚠ Department not found: $normalizedDept. '
+        'Falling back to: $resolvedDept. Available: $_allDepartmentList',
+      );
+      setState(() {
+        department = resolvedDept;
+        hospital = null;
+        doctor = null;
+        _filteredHospitalList = [];
+        _doctorList = [];
+      });
+      _filterHospitalsByDepartment(resolvedDept);
+    }
+  }
+
+  String? _resolveGeneralMedicineDepartment() {
+    final exactMatch = _allDepartmentList.firstWhere(
+      (d) => d.toLowerCase().trim() == 'general medicine',
+      orElse: () => '',
+    );
+    if (exactMatch.isNotEmpty) return exactMatch;
+
+    final generalLikeMatch = _allDepartmentList.firstWhere(
+      (d) {
+        final normalized = d.toLowerCase().trim();
+        return normalized.contains('general') ||
+            normalized.contains('medicine') ||
+            normalized == 'gp';
+      },
+      orElse: () => '',
+    );
+    return generalLikeMatch.isNotEmpty ? generalLikeMatch : null;
+
   }
 
   void _handlePreSelectedHospital(String hospitalName) {
     // Find the hospital in the list and pre-select it
-    final selectedHospital = _hospitalList.firstWhere(
+    final selectedHospital = _allHospitalList.firstWhere(
       (h) => h.name.toLowerCase() == hospitalName.toLowerCase(),
-      orElse: () => _hospitalList.isNotEmpty ? _hospitalList[0] : throw Exception('No hospitals available'),
+      orElse: () => _allHospitalList.isNotEmpty ? _allHospitalList[0] : throw Exception('No hospitals available'),
     );
 
-    if (selectedHospital != null) {
-      setState(() {
-        hospital = selectedHospital.name;
-        department = null;
-        doctor = null;
-        _departmentList = [];
-        _doctorList = [];
-      });
-      _loadDepartments(selectedHospital.id);
+    setState(() {
+      hospital = selectedHospital.name;
+      department = null;
+      doctor = null;
+      _filteredHospitalList = [];
+      _doctorList = [];
+    });
+    // Load departments for the pre-selected hospital
+    _loadDepartmentsForHospital(selectedHospital.id);
+  }
+
+  Future<void> _loadDepartmentsForHospital(String hospitalId) async {
+    try {
+      final depts = await HospitalService.getDepartments(hospitalId);
+      setState(() => _hospitalDepartmentList = depts);
+    } catch (e) {
+      debugPrint("Error loading departments for hospital: $e");
+      setState(() => _hospitalDepartmentList = []);
     }
   }
 
-  Future<void> _loadDepartments(String hospitalId) async {
-    try {
-      final depts = await HospitalService.getDepartments(hospitalId);
-      setState(() => _departmentList = depts);
-    } catch (e) {
-      debugPrint("Error loading departments: $e");
+  void _filterHospitalsByDepartment(String dept) async {
+    final filteredHospitals = <HospitalModel>[];
+    final normalizedDept = dept.toLowerCase().trim();
+    
+    for (final hospital in _allHospitalList) {
+      try {
+        final depts = await HospitalService.getDepartments(hospital.id);
+        // Case-insensitive department matching
+        final hasMatchingDept = depts.any((d) => d.toLowerCase().trim() == normalizedDept);
+        if (hasMatchingDept) {
+          filteredHospitals.add(hospital);
+        }
+      } catch (e) {
+        debugPrint("Error checking departments for ${hospital.name}: $e");
+      }
     }
+    debugPrint('Filtered hospitals for $dept: ${filteredHospitals.length} found');
+    setState(() => _filteredHospitalList = filteredHospitals);
   }
 
   Future<void> _loadDoctors(String hospitalId, String dept) async {
@@ -475,53 +593,121 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
             _buildTopBar(),
             Expanded(
               child: ListView(
+                physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
                 children: [
                   // 🔥 INFO BANNER — Old UI style
                   _buildInfoCard(),
                   const SizedBox(height: 24),
 
-                  _label('Select Hospital'),
-                  const SizedBox(height: 8),
-                  _buildHospitalDropdown(
-                    _hospitalList,
-                    hospital,
-                    (v) {
-                      setState(() {
-                        hospital = v;
-                        department = null;
-                        doctor = null;
-                        _departmentList = [];
-                        _doctorList = [];
-                      });
-                      if (v != null) {
-                        final hId = _hospitalList.firstWhere((h) => h.name == v).id;
-                        _loadDepartments(hId);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 18),
-
-                  _label('Select Department'),
-                  const SizedBox(height: 8),
-                  _buildDropdown(
-                    'Department', 
-                    department,
-                    _departmentList,
-                    Icons.medical_services_outlined,
-                    (v) {
-                      setState(() {
-                        department = v;
-                        doctor = null;
-                        _doctorList = [];
-                      });
-                      if (v != null && hospital != null) {
-                        final hId = _hospitalList.firstWhere((h) => h.name == hospital).id;
-                        _loadDoctors(hId, v);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 18),
+                  if (_isHospitalFirstFlow) ...[
+                    _label('Select Hospital'),
+                    const SizedBox(height: 8),
+                    _buildHospitalDropdown(
+                      _allHospitalList,
+                      hospital,
+                      (v) async {
+                        setState(() {
+                          hospital = v;
+                          department = null;
+                          doctor = null;
+                          _doctorList = [];
+                          _hospitalDepartmentList = [];
+                        });
+                        if (v != null) {
+                          final hId = _allHospitalList.firstWhere((h) => h.name == v).id;
+                          await _loadDepartmentsForHospital(hId);
+                        }
+                      },
+                    ),
+                    if (hospital != null) ...[
+                      const SizedBox(height: 12),
+                      Builder(builder: (ctx) {
+                        final h = _allHospitalList.firstWhere((e) => e.name == hospital);
+                        return HospitalCard(
+                          hospitalName: h.name,
+                          hospitalLat: h.hospitalLat,
+                          hospitalLon: h.hospitalLon,
+                          currentQueueWait: 30, // Default estimated wait for hospital
+                          onTap: () {},
+                        );
+                      }),
+                    ],
+                    const SizedBox(height: 18),
+                    _label('Select Department'),
+                    const SizedBox(height: 8),
+                    _buildDropdown(
+                      'Department',
+                      department,
+                      _hospitalDepartmentList,
+                      Icons.medical_services_outlined,
+                      (v) {
+                        setState(() {
+                          department = v;
+                          doctor = null;
+                          _doctorList = [];
+                        });
+                        if (v != null && hospital != null) {
+                          final hId = _allHospitalList.firstWhere((h) => h.name == hospital).id;
+                          _loadDoctors(hId, v);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                  ] else ...[
+                    _label('Select Department'),
+                    const SizedBox(height: 8),
+                    _buildDropdown(
+                      'Department',
+                      department,
+                      _allDepartmentList,
+                      Icons.medical_services_outlined,
+                      (v) {
+                        setState(() {
+                          department = v;
+                          hospital = null;
+                          doctor = null;
+                          _filteredHospitalList = [];
+                          _doctorList = [];
+                        });
+                        if (v != null) {
+                          _filterHospitalsByDepartment(v);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    _label('Select Hospital'),
+                    const SizedBox(height: 8),
+                    _buildHospitalDropdown(
+                      _filteredHospitalList,
+                      hospital,
+                      (v) {
+                        setState(() {
+                          hospital = v;
+                          doctor = null;
+                          _doctorList = [];
+                        });
+                        if (v != null && department != null) {
+                          final hId = _filteredHospitalList.firstWhere((h) => h.name == v).id;
+                          _loadDoctors(hId, department!);
+                        }
+                      },
+                    ),
+                    if (hospital != null) ...[
+                      const SizedBox(height: 12),
+                      Builder(builder: (ctx) {
+                        final h = _allHospitalList.firstWhere((e) => e.name == hospital);
+                        return HospitalCard(
+                          hospitalName: h.name,
+                          hospitalLat: h.hospitalLat,
+                          hospitalLon: h.hospitalLon,
+                          currentQueueWait: 30, // Default estimated wait for hospital
+                          onTap: () {},
+                        );
+                      }),
+                    ],
+                    const SizedBox(height: 18),
+                  ],
 
                   _label('Select Doctor'),
                   const SizedBox(height: 8),
@@ -620,44 +806,50 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
     IconData icon,
     Function(String?) onChanged,
   ) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: value != null ? _primary.withOpacity(0.3) : Colors.transparent,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: value != null ? _primary.withOpacity(0.3) : Colors.transparent,
           ),
-        ],
-      ),
-      child: DropdownButtonFormField<String>(
-        value: value,
-        hint: Text(
-          'Choose $label',
-          style: const TextStyle(fontSize: 14, color: _muted),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        decoration: InputDecoration(
-          prefixIcon: Icon(icon, size: 20, color: value != null ? _primary : _muted),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        child: DropdownButtonFormField<String>(
+          value: value,
+          hint: Text(
+            'Choose $label',
+            style: const TextStyle(fontSize: 14, color: _muted),
+          ),
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, size: 20, color: value != null ? _primary : _muted),
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          ),
+          icon: const Padding(
+            padding: EdgeInsets.only(right: 12),
+            child: Icon(Icons.expand_more_rounded, color: _muted),
+          ),
+          isExpanded: true,
+          items: items
+              .map((e) => DropdownMenuItem<String>(
+                    value: e,
+                    child: Text(e,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  ))
+              .toList(),
+          onChanged: isBooking ? null : onChanged,
+          dropdownColor: _surface,
+          style: const TextStyle(fontSize: 14, color: Color(0xFF0F172A)),
         ),
-        icon: const Padding(
-          padding: EdgeInsets.only(right: 12),
-          child: Icon(Icons.expand_more_rounded, color: _muted),
-        ),
-        items: items
-            .map((e) => DropdownMenuItem(
-                  value: e,
-                  child: Text(e,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ))
-            .toList(),
-        onChanged: isBooking ? null : onChanged,
       ),
     );
   }
@@ -774,7 +966,12 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: _primary.withOpacity(0.1),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0B1D3A), Color(0xFF1A3560), Color(0xFF1E4A7A)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              stops: [0.0, 0.55, 1.0],
+            ),
             borderRadius: BorderRadius.circular(28),
           ),
           child: Column(
@@ -785,7 +982,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
                   Text(
                     'LIVE STATUS',
                     style: TextStyle(
-                      color: _primary.withOpacity(0.7),
+                      color: Colors.white.withOpacity(0.7),
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
@@ -928,8 +1125,8 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
     return Column(children: [
       Text(val,
           style: const TextStyle(
-              color: _primary, fontSize: 22, fontWeight: FontWeight.w900)),
-      Text(label, style: TextStyle(color: _primary.withOpacity(0.6), fontSize: 11)),
+              color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+      Text(label, style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11)),
     ]);
   }
 
@@ -996,7 +1193,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
 
     try {
       // Look up the exact IDs required by the Node.js backend
-      final hId = _hospitalList.firstWhere((h) => h.name == hospital).id;
+      final hId = _allHospitalList.firstWhere((h) => h.name == hospital).id;
       final dId = _doctorList.firstWhere((d) => d.name == doctor).id;
 
       final appointment = await AppointmentService.bookAppointment(
