@@ -97,6 +97,8 @@ router.post('/register/hospital', async (req, res) => {
       // Hospital details
       hospitalName,
       address,
+      location,
+      fullAddress,
       departments
     } = req.body;
 
@@ -125,6 +127,8 @@ router.post('/register/hospital', async (req, res) => {
     const hospital = new Hospital({
       name: hospitalName,
       address,
+      location,
+      fullAddress,
       departments: departments || []
     });
     await hospital.save();

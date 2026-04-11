@@ -10,6 +10,7 @@ import '../models/doctor.dart';
 import '../services/appointment_service.dart';
 import '../services/auth_service.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 const _primary = Color(0xFF2563EB);
@@ -297,6 +298,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
   bool _isScheduled = false;
   String? _selectedSlot;
   String? _pendingPreselectedHospital;
+  Position? _userPosition;
 
   // Real Database Lists
   List<HospitalModel> _hospitalList = [];
@@ -332,9 +334,59 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
         _handlePreSelectedHospital(_pendingPreselectedHospital!);
         _pendingPreselectedHospital = null;
       }
+      _determinePositionAndSort();
     } catch (e) {
       debugPrint("Error loading hospitals: $e");
     }
+  }
+
+  Future<void> _determinePositionAndSort() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+    if (permission == LocationPermission.deniedForever) return;
+
+    try {
+      final position = await Geolocator.getCurrentPosition();
+      setState(() {
+        _userPosition = position;
+      });
+      _sortHospitals();
+    } catch (e) {
+      debugPrint("Error getting location: $e");
+    }
+  }
+
+  void _sortHospitals() {
+    if (_userPosition == null || _hospitalList.isEmpty) return;
+    
+    for (var h in _hospitalList) {
+      if (h.latitude != null && h.longitude != null) {
+        h.distanceInKm = Geolocator.distanceBetween(
+          _userPosition!.latitude, 
+          _userPosition!.longitude, 
+          h.latitude!, 
+          h.longitude!
+        ) / 1000.0;
+      }
+    }
+    
+    setState(() {
+      _hospitalList.sort((a, b) {
+        if (a.distanceInKm == null && b.distanceInKm == null) return 0;
+        if (a.distanceInKm == null) return 1;
+        if (b.distanceInKm == null) return -1;
+        return a.distanceInKm!.compareTo(b.distanceInKm!);
+      });
+    });
   }
 
   void _handlePreSelectedHospital(String hospitalName) {
@@ -431,11 +483,9 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
 
                   _label('Select Hospital'),
                   const SizedBox(height: 8),
-                  _buildDropdown(
-                    'Hospital', 
+                  _buildHospitalDropdown(
+                    _hospitalList,
                     hospital,
-                    _hospitalList.map((h) => h.name).toList(),
-                    Icons.local_hospital_outlined,
                     (v) {
                       setState(() {
                         hospital = v;
@@ -607,6 +657,62 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 ))
             .toList(),
+        onChanged: isBooking ? null : onChanged,
+      ),
+    );
+  }
+
+  // 🔥 CUSTOM LOCATION HOSPITAL DROPDOWN
+  Widget _buildHospitalDropdown(
+    List<HospitalModel> hospitals,
+    String? value,
+    Function(String?) onChanged,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: value != null ? _primary.withOpacity(0.3) : Colors.transparent,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: DropdownButtonFormField<String>(
+        value: value,
+        isExpanded: true,
+        hint: const Text(
+          'Choose Hospital',
+          style: TextStyle(fontSize: 14, color: _muted),
+        ),
+        decoration: InputDecoration(
+          prefixIcon: Icon(Icons.local_hospital_outlined, size: 20, color: value != null ? _primary : _muted),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        ),
+        icon: const Padding(
+          padding: EdgeInsets.only(right: 12),
+          child: Icon(Icons.expand_more_rounded, color: _muted),
+        ),
+        items: hospitals.map((h) {
+          String display = h.name;
+          if (h.distanceInKm != null) {
+            display = "$display · ${h.distanceInKm!.toStringAsFixed(1)}km away";
+          }
+          return DropdownMenuItem(
+            value: h.name,
+            child: Text(
+              display,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+          );
+        }).toList(),
         onChanged: isBooking ? null : onChanged,
       ),
     );

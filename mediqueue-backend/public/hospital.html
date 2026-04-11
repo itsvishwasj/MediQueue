@@ -219,6 +219,67 @@
         <div id="reg-err" class="alert alert-error" style="display:none;"><span id="reg-err-msg"></span></div>
         <div class="fg"><label>Hospital Name *</label><input id="r-name" placeholder="e.g. Apollo Clinic"/></div>
         <div class="fg"><label>Address *</label><input id="r-addr" placeholder="e.g. Koramangala, Bengaluru"/></div>
+        
+        <div class="location-picker" style="margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px; position: relative;">
+          <label for="hospitalSearch" style="font-weight: bold; font-size: 13px; display: block; margin-bottom: 6px;">Find Hospital Location on Map:</label>
+          <input type="text" id="hospitalSearch" oninput="handleSearch(this.value)" autocomplete="off" placeholder="Type at least 3 letters (e.g., Apollo Bengaluru)" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit;">
+          <ul id="searchResults" style="list-style-type: none; padding: 0; margin: 0; max-height: 200px; overflow-y: auto; background: white; border-radius: 4px; box-shadow: 0 8px 16px rgba(0,0,0,0.15); position: absolute; width: calc(100% - 30px); z-index: 1000;"></ul>
+
+          <input type="hidden" id="hospitalLat" name="latitude">
+          <input type="hidden" id="hospitalLon" name="longitude">
+          <input type="hidden" id="hospitalAddress" name="fullAddress">
+          
+          <p id="selectedLocationText" style="color: #00C97A; font-size: 0.9em; margin-top: 10px; font-weight: bold;"></p>
+        </div>
+
+        <script>
+          let typingTimer;
+          async function handleSearch(query) {
+            const resultsContainer = document.getElementById('searchResults');
+            clearTimeout(typingTimer);
+            if (query.length < 3) { resultsContainer.innerHTML = ""; return; }
+            resultsContainer.innerHTML = "<li style='padding: 10px; color: gray; font-size: 13px;'>Searching live map...</li>";
+
+            typingTimer = setTimeout(async () => {
+              const email = "contact@mediqueue.com"; 
+              const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ' Bengaluru')}&format=json&limit=5&email=${email}`;
+              try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("API Error");
+                const data = await response.json();
+                resultsContainer.innerHTML = ""; 
+
+                if (data.length === 0) {
+                  resultsContainer.innerHTML = "<li style='padding: 10px; color: red; font-size: 13px;'>No hospitals found.</li>";
+                  return;
+                }
+
+                data.forEach(place => {
+                  const li = document.createElement('li');
+                  li.style.cssText = "padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; background: white; transition: 0.2s;";
+                  li.onmouseover = () => li.style.background = "#f0f8ff";
+                  li.onmouseout = () => li.style.background = "white";
+                  li.innerHTML = `<strong style="color: #333; font-size: 14px;">${place.name || 'Location'}</strong><br><span style='font-size: 0.8em; color: #666;'>${place.display_name}</span>`;
+                  
+                  li.onclick = () => {
+                    document.getElementById('hospitalLat').value = place.lat;
+                    document.getElementById('hospitalLon').value = place.lon;
+                    document.getElementById('hospitalAddress').value = place.display_name;
+                    document.getElementById('hospitalSearch').value = place.name || place.display_name.split(',')[0];
+                    document.getElementById('selectedLocationText').innerHTML = `📍 Locked: ${parseFloat(place.lat).toFixed(4)}, ${parseFloat(place.lon).toFixed(4)}`;
+                    // Auto-fill the address field above for convenience!
+                    document.getElementById('r-addr').value = place.name || place.display_name.split(',')[0];
+                    resultsContainer.innerHTML = "";
+                  };
+                  resultsContainer.appendChild(li);
+                });
+              } catch (error) {
+                console.error("Map search failed:", error);
+                resultsContainer.innerHTML = `<li style='padding: 10px; color: red; font-size: 13px;'>Network error.</li>`;
+              }
+            }, 500); 
+          }
+        </script>
         <div class="fg"><label>Departments <span style="font-weight:400;color:var(--muted);">(comma separated)</span></label><input id="r-depts" placeholder="Cardiology, General, Orthopedics"/></div>
         <div class="g2">
           <div class="fg"><label>Contact Email *</label><input id="r-email" type="email" placeholder="hospital@email.com"/></div>
@@ -501,11 +562,17 @@
 <div id="toast"></div>
 
 <script>
-  const API = 'http://localhost:5000/api';
+  const API = 'https://mediqueue-backend-el5a.onrender.com/api';
   let hospitalId = null, hospitalName = '', hospitalToken = null;
   let socket = null, currentDoctorId = null, allDoctors = [];
   let hospitalDepartments = [];
   let pendingDeleteId = null, pendingDeleteName = '';
+  const DEMO_HOSPITAL_ID = '69d20400dcc05573cc367d24';
+  const STORAGE_KEYS = {
+    token: 'mq_hospital_token',
+    hospitalId: 'mq_hospital_id',
+    hospitalName: 'mq_hospital_name'
+  };
 
   // ── INIT ──────────────────────────────────────────
   window.onload = () => {
@@ -513,7 +580,30 @@
     document.querySelectorAll('.overlay').forEach(o => {
       o.addEventListener('click', e => { if (e.target === o) o.classList.remove('show'); });
     });
+    restoreSession();
+    if (hospitalId && hospitalName) {
+      openDashboard();
+    }
   };
+
+  function persistSession() {
+    if (!hospitalId || !hospitalName || !hospitalToken) return;
+    localStorage.setItem(STORAGE_KEYS.token, hospitalToken);
+    localStorage.setItem(STORAGE_KEYS.hospitalId, hospitalId);
+    localStorage.setItem(STORAGE_KEYS.hospitalName, hospitalName);
+  }
+
+  function restoreSession() {
+    hospitalToken = localStorage.getItem(STORAGE_KEYS.token);
+    hospitalId = localStorage.getItem(STORAGE_KEYS.hospitalId);
+    hospitalName = localStorage.getItem(STORAGE_KEYS.hospitalName) || '';
+  }
+
+  function clearSession() {
+    localStorage.removeItem(STORAGE_KEYS.token);
+    localStorage.removeItem(STORAGE_KEYS.hospitalId);
+    localStorage.removeItem(STORAGE_KEYS.hospitalName);
+  }
 
   // ── AUTH TAB SWITCH ───────────────────────────────
   function switchAuthTab(id, btn) {
@@ -539,6 +629,7 @@
       hospitalToken = data.token;
       hospitalId    = data.user.hospitalId;
       hospitalName  = data.user.name;
+      persistSession();
       openDashboard();
     } catch(e) { showA('login-err','Server error. Is backend running?'); }
     finally { btn.textContent = 'Sign In →'; btn.disabled = false; }
@@ -553,6 +644,11 @@
     const phone = document.getElementById('r-phone').value.trim();
     const pass  = document.getElementById('r-pass').value;
     const pass2 = document.getElementById('r-pass2').value;
+
+    const lat = document.getElementById('hospitalLat').value;
+    const lon = document.getElementById('hospitalLon').value;
+    const fullAddress = document.getElementById('hospitalAddress').value;
+
     hideA('reg-err');
     if (!name || !addr || !email || !phone || !pass) { showA('reg-err','All fields are required'); return; }
     if (pass !== pass2) { showA('reg-err','Passwords do not match'); return; }
@@ -568,6 +664,12 @@
         phone: phone,
         password: pass
       };
+      if (lat && lon) {
+        payload.location = { latitude: parseFloat(lat), longitude: parseFloat(lon) };
+      }
+      if (fullAddress) {
+        payload.fullAddress = fullAddress;
+      }
       const res  = await fetch(`${API}/auth/register/hospital`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
       const data = await res.json();
       if (!res.ok) { showA('reg-err', data.message || 'Registration failed'); return; }
@@ -578,6 +680,7 @@
         hospitalToken = lData.token;
         hospitalId    = lData.user.hospitalId;
         hospitalName  = lData.user.name;
+        persistSession();
         openDashboard();
       } else {
         // Registration succeeded but auto-login failed — ask user to sign in
@@ -593,6 +696,7 @@
   function doLogout() {
     hospitalId = null; hospitalName = ''; hospitalToken = null;
     allDoctors = []; currentDoctorId = null;
+    clearSession();
     if (socket) socket.disconnect();
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('sidebar').style.display   = 'none';
@@ -628,7 +732,7 @@
 
   // ── SOCKET ────────────────────────────────────────
   function initSocket() {
-    socket = io('http://localhost:5000');
+    socket = io('wss://mediqueue-backend-el5a.onrender.com', { transports: ['websocket'] });
     socket.on('connect', () => console.log('Socket connected'));
   }
 
@@ -644,38 +748,56 @@
 
   // ── DOCTORS ───────────────────────────────────────
   async function loadDoctors() {
-    if (!hospitalId) return;
     try {
-      const res = await fetch(`${API}/doctors?hospitalId=${hospitalId}`);
-      allDoctors = await res.json();
+      // Guaranteed visibility: load all doctors directly from backend.
+      const fetchUrl = hospitalId 
+        ? `https://mediqueue-backend-el5a.onrender.com/api/doctors?hospitalId=${hospitalId}`
+        : 'https://mediqueue-backend-el5a.onrender.com/api/doctors';
+      const res = await fetch(fetchUrl, { cache: 'no-store' });
+      const responseData = await res.json();
+
+      console.log('HOSPITAL DATA CHECK:', responseData);
+
+      const incomingData = responseData?.doctors || responseData?.data || responseData;
+      allDoctors = Array.isArray(incomingData) ? [...incomingData] : [];
+
+      if (!Array.isArray(incomingData)) {
+        console.error('Data is not an array. Check API structure.');
+      }
+
       renderDoctorsTable(allDoctors);
       populateQueueSel(allDoctors);
-      document.getElementById('st-docs').textContent  = allDoctors.length;
-      document.getElementById('st-depts').textContent = [...new Set(allDoctors.map(d=>d.department))].length;
-    } catch(e) { console.error(e); }
+      updateDoctorStats(allDoctors);
+    } catch (err) {
+      console.error('API Connection failed:', err);
+      allDoctors = [];
+      renderDoctorsTable(allDoctors);
+      populateQueueSel(allDoctors);
+      updateDoctorStats(allDoctors);
+    }
   }
-
   function renderDoctorsTable(docs) {
     const tbody = document.getElementById('doc-tbl-body');
-    if (!docs.length) {
-      tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="e-ico">🩺</div><p>No doctors added yet. Add your first doctor!</p></div></td></tr>`;
+    const safeDoctors = Array.isArray(docs) ? docs : [];
+    if (!safeDoctors.length) {
+      tbody.innerHTML = `<tr><td colspan="4" style="padding:40px 16px;text-align:center;color:var(--muted);"><div style="display:flex;flex-direction:column;align-items:center;gap:8px;"><p>No doctors found for this Hospital ID.</p><p style="font-size:12px;">Check console for raw data log.</p></div></td></tr>`;
       return;
     }
-    tbody.innerHTML = docs.map(d => `
+    tbody.innerHTML = safeDoctors.map((d, index) => `
       <tr>
         <td>
           <div style="display:flex;align-items:center;gap:10px;">
-            <div style="width:32px;height:32px;background:var(--primary-lt);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:14px;">👨‍⚕️</div>
-            <strong>${d.name}</strong>
+            <div style="width:32px;height:32px;background:var(--primary-lt);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">DR</div>
+            <strong>${d?.name || 'Unknown Doctor'}</strong>
           </div>
         </td>
-        <td><span class="tag tag-blue">${d.department}</span></td>
-        <td style="color:var(--muted);">~${d.avgConsultationTime} min</td>
+        <td><span class="tag tag-blue">${d?.department || 'General'}</span></td>
+        <td style="color:var(--muted);">~${d?.avgConsultationTime || d?.avgTime || 15} min</td>
         <td>
           <div style="display:flex;gap:6px;">
-            <button class="btn btn-outline btn-sm" onclick="openCabinQRForDoctor('${d._id}','${escQ(d.name)}','${escQ(d.department)}')">📷 QR</button>
-            <button class="btn btn-ghost btn-sm" onclick="editDoctor('${d._id}','${escQ(d.name)}','${escQ(d.department)}','${d.avgConsultationTime}')">✏️ Edit</button>
-            <button class="btn btn-danger btn-sm" onclick="confirmDeleteDoctor('${d._id}','${escQ(d.name)}')">🗑</button>
+            <button class="btn btn-outline btn-sm" onclick="openCabinQRForDoctor('${d?._id || ''}','${escQ(d?.name || 'Unknown Doctor')}','${escQ(d?.department || 'General')}')">QR</button>
+            <button class="btn btn-ghost btn-sm" onclick="editDoctor('${d?._id || ''}','${escQ(d?.name || 'Unknown Doctor')}','${escQ(d?.department || 'General')}','${d?.avgConsultationTime || d?.avgTime || 15}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="confirmDeleteDoctor('${d?._id || index}','${escQ(d?.name || 'Unknown Doctor')}')">Delete</button>
           </div>
         </td>
       </tr>`).join('');
@@ -829,7 +951,13 @@
     const el = document.getElementById('qr-inline');
     el.innerHTML = '';
     if (!doctorId) return;
-    new QRCode(el, { text:`mediqueue://book?doctorId=${doctorId}&hospitalId=${hospitalId}`, width:120, height:120, colorDark:'#0F172A', colorLight:'#F0F4FF', correctLevel:QRCode.CorrectLevel.H });
+    const qrHospitalId = hospitalId || DEMO_HOSPITAL_ID;
+    const payload = `mediqueue://book?doctorId=${doctorId}&hospitalId=${qrHospitalId}`;
+    try {
+      new QRCode(el, { text: payload, width: 120, height: 120, colorDark: '#0F172A', colorLight: '#F0F4FF', correctLevel: QRCode.CorrectLevel.H });
+    } catch(e) {
+      el.innerHTML = `<p style="font-size:11px;color:var(--muted);word-break:break-all;">${payload}</p>`;
+    }
   }
 
   function openCabinQRModal() {
@@ -843,7 +971,13 @@
     document.getElementById('m-dept').textContent     = `${dept} · ${hospitalName}`;
     const el = document.getElementById('qr-render');
     el.innerHTML = '';
-    new QRCode(el, { text:`mediqueue://book?doctorId=${doctorId}&hospitalId=${hospitalId}`, width:180, height:180, colorDark:'#0F172A', colorLight:'#FFFFFF', correctLevel:QRCode.CorrectLevel.H });
+    const qrHospitalId = hospitalId || DEMO_HOSPITAL_ID;
+    const payload = `mediqueue://book?doctorId=${doctorId}&hospitalId=${qrHospitalId}`;
+    try {
+      new QRCode(el, { text: payload, width: 180, height: 180, colorDark: '#0F172A', colorLight: '#FFFFFF', correctLevel: QRCode.CorrectLevel.H });
+    } catch (e) {
+      el.innerHTML = `<p style="font-size:11px;color:var(--muted);word-break:break-all;">${payload}</p>`;
+    }
     openModal('modal-cabin-qr');
   }
 
@@ -863,37 +997,22 @@
   }
 
   // ── RECEPTION QR (Hospital) ───────────────────────
-  async function loadReceptionQR() {
+  function loadReceptionQR() {
+    console.log('Current Hospital ID for QR:', hospitalId);
+    const qrHospitalId = hospitalId || DEMO_HOSPITAL_ID;
+    if (!hospitalId) console.warn('Using demo fallback hospital ID for QR:', DEMO_HOSPITAL_ID);
+    
+    document.getElementById('reception-qr-card').style.display = 'block';
+    document.getElementById('reception-hosp-name').textContent = hospitalName;
+    const payload = `mediqueue://hospital?id=${qrHospitalId}`;
+    document.getElementById('reception-qr-payload').textContent = payload;
+
+    const el = document.getElementById('qr-reception-render');
+    el.innerHTML = '';
     try {
-      const res  = await fetch(`${API}/hospitals/${hospitalId}/reception-qr`);
-      const data = await res.json();
-      if (!res.ok) { toast('Failed to load Reception QR'); return; }
-
-      // Show QR card
-      document.getElementById('reception-qr-card').style.display = 'block';
-      document.getElementById('reception-hosp-name').textContent = data.hospitalName;
-      document.getElementById('reception-qr-payload').textContent = data.payload;
-
-      // Render QR from base64
-      const el = document.getElementById('qr-reception-render');
-      el.innerHTML = '';
-      if (data.qrDataUrl) {
-        const img = document.createElement('img');
-        img.src = data.qrDataUrl;
-        img.style.cssText = 'width:200px;height:200px;border-radius:10px;';
-        el.appendChild(img);
-      } else {
-        // Fallback: generate client-side
-        new QRCode(el, { text:data.payload, width:200, height:200, colorDark:'#0F172A', colorLight:'#F0F4FF', correctLevel:QRCode.CorrectLevel.H });
-      }
+      new QRCode(el, { text: payload, width: 200, height: 200, colorDark: '#0F172A', colorLight: '#FFFFFF', correctLevel: QRCode.CorrectLevel.H });
     } catch(e) {
-      // Fallback: generate client-side if backend QR route not yet deployed
-      const el = document.getElementById('qr-reception-render');
-      el.innerHTML = '';
-      new QRCode(el, { text:`mediqueue://hospital?id=${hospitalId}`, width:200, height:200, colorDark:'#0F172A', colorLight:'#F0F4FF', correctLevel:QRCode.CorrectLevel.H });
-      document.getElementById('reception-qr-card').style.display = 'block';
-      document.getElementById('reception-hosp-name').textContent = hospitalName;
-      document.getElementById('reception-qr-payload').textContent = `mediqueue://hospital?id=${hospitalId}`;
+      el.innerHTML = `<p style="font-size:11px;color:var(--muted);word-break:break-all;">${payload}</p>`;
     }
   }
 
@@ -915,8 +1034,10 @@
     if (!hospitalId) return;
     hideA('set-err'); hideA('set-ok');
     try {
-      const res  = await fetch(`${API}/hospitals`);
-      const list = await res.json();
+      const res  = await fetch(`${API}/hospitals`, { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Failed to load hospitals');
+      const list = Array.isArray(data) ? data : (Array.isArray(data?.hospitals) ? data.hospitals : []);
       const h    = list.find(x => x._id === hospitalId);
       if (!h) return;
       hospitalDepartments = h.departments || [];
@@ -924,7 +1045,7 @@
       document.getElementById('set-addr').value  = h.address || '';
       document.getElementById('set-depts').value = hospitalDepartments.join(', ');
       populateDeptDropdowns();
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error('loadSettingsForm error:', e); }
   }
 
   function populateDeptDropdowns() {
@@ -966,6 +1087,19 @@
   function showA(id, msg) { const el=document.getElementById(id); el.style.display='flex'; document.getElementById(`${id}-msg`).textContent=msg; }
   function hideA(id)      { document.getElementById(id).style.display='none'; }
   function toast(msg)     { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
+  function updateDoctorStats(doctors) {
+    const list = Array.isArray(doctors) ? doctors : [];
+    document.getElementById('st-docs').textContent = String(list.length);
+    const uniqueDepts = [...new Set(list.map(d => d?.department).filter(Boolean))];
+    document.getElementById('st-depts').textContent = String(uniqueDepts.length);
+  }
+  function normalizeDoctorsResponse(data) {
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.doctors)) return data.doctors;
+    if (Array.isArray(data?.data)) return data.data;
+    console.error('Data received is not an array:', data);
+    return [];
+  }
   function escQ(str)      { return String(str||'').replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
 </script>
 </body>

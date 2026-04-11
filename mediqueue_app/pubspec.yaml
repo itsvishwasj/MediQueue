@@ -48,6 +48,7 @@ dependencies:
 
   # Easy navigation
   go_router: ^13.2.0
+  geolocator: ^14.0.2
 
 dev_dependencies:
   flutter_test:

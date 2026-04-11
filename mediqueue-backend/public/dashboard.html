@@ -375,6 +375,83 @@
     <div id="h-ok"  class="alert alert-success" style="display:none;"><span id="h-ok-msg"></span></div>
     <div class="fg"><label>Hospital Name *</label><input id="hosp-name" placeholder="e.g. Apollo Clinic"/></div>
     <div class="fg"><label>Address / Location *</label><input id="hosp-addr" placeholder="e.g. Koramangala, Bengaluru"/></div>
+    <div class="location-picker" style="margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px; position: relative;">
+      <label for="hospitalSearch" style="font-weight: bold; font-size: 13px; display: block; margin-bottom: 6px;">Find Hospital Location:</label>
+      
+      <input type="text" id="hospitalSearch" oninput="handleSearch(this.value)" autocomplete="off" placeholder="Type at least 3 letters (e.g., Apollo)" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit;">
+      
+      <ul id="searchResults" style="list-style-type: none; padding: 0; margin: 0; max-height: 200px; overflow-y: auto; background: white; border-radius: 4px; box-shadow: 0 8px 16px rgba(0,0,0,0.15); position: absolute; width: calc(100% - 30px); z-index: 1000;"></ul>
+
+      <input type="hidden" id="hospitalLat" name="latitude">
+      <input type="hidden" id="hospitalLon" name="longitude">
+      <input type="hidden" id="hospitalAddress" name="fullAddress">
+      
+      <p id="selectedLocationText" style="color: #00C97A; font-size: 0.9em; margin-top: 10px; font-weight: bold;"></p>
+    </div>
+
+    <script>
+      let typingTimer;
+
+      async function handleSearch(query) {
+        const resultsContainer = document.getElementById('searchResults');
+        
+        clearTimeout(typingTimer);
+
+        if (query.length < 3) {
+          resultsContainer.innerHTML = "";
+          return;
+        }
+
+        resultsContainer.innerHTML = "<li style='padding: 10px; color: gray; font-size: 13px;'>Searching live map...</li>";
+
+        typingTimer = setTimeout(async () => {
+          // We pass the email in the URL, NOT in the headers. This bypasses the browser block!
+          const email = "contact@mediqueue.com"; 
+          const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ' Bengaluru')}&format=json&limit=5&email=${email}`;
+
+          try {
+            // Plain fetch. No forbidden headers.
+            const response = await fetch(url);
+            
+            if (!response.ok) throw new Error("API Error");
+            
+            const data = await response.json();
+            resultsContainer.innerHTML = ""; 
+
+            if (data.length === 0) {
+              resultsContainer.innerHTML = "<li style='padding: 10px; color: red; font-size: 13px;'>No hospitals found.</li>";
+              return;
+            }
+
+            data.forEach(place => {
+              const li = document.createElement('li');
+              li.style.cssText = "padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; background: white; transition: 0.2s;";
+              
+              li.onmouseover = () => li.style.background = "#f0f8ff";
+              li.onmouseout = () => li.style.background = "white";
+
+              li.innerHTML = `<strong style="color: #333; font-size: 14px;">${place.name || 'Location'}</strong><br><span style='font-size: 0.8em; color: #666;'>${place.display_name}</span>`;
+              
+              li.onclick = () => {
+                document.getElementById('hospitalLat').value = place.lat;
+                document.getElementById('hospitalLon').value = place.lon;
+                document.getElementById('hospitalAddress').value = place.display_name;
+                
+                // Clean up the UI
+                document.getElementById('hospitalSearch').value = place.name || place.display_name.split(',')[0];
+                document.getElementById('selectedLocationText').innerHTML = `📍 Locked: ${parseFloat(place.lat).toFixed(4)}, ${parseFloat(place.lon).toFixed(4)}`;
+                resultsContainer.innerHTML = "";
+              };
+              resultsContainer.appendChild(li);
+            });
+
+          } catch (error) {
+            console.error("Map search failed:", error);
+            resultsContainer.innerHTML = `<li style='padding: 10px; color: red; font-size: 13px;'>Network error.</li>`;
+          }
+        }, 500); // 500ms delay for debouncing
+      }
+    </script>
     <div class="fg"><label>Departments <span style="font-weight:400;color:var(--muted);">(comma separated)</span></label><input id="hosp-depts" placeholder="Cardiology, General, Pediatrics"/></div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
       <button class="btn btn-ghost" onclick="closeModal('modal-add-hospital')">Cancel</button>
@@ -471,7 +548,7 @@
 <div id="toast"></div>
 
 <script>
-  const API = 'http://localhost:5000/api';
+  const API = 'https://mediqueue-backend-el5a.onrender.com/api';
   let socket = null, currentDoctorId = null, allDoctors = [], allHospitals = [];
   let pendingDelete = null; // { type: 'hospital'|'doctor', id, name }
 
@@ -507,7 +584,7 @@
 
   // ── SOCKET ────────────────────────────────────────
   function initSocket() {
-    socket = io();
+    socket = io('wss://mediqueue-backend-el5a.onrender.com', { transports: ['websocket'] });
     socket.on('connect', () => console.log('Socket connected'));
   }
 
@@ -627,15 +704,20 @@
     const name  = document.getElementById('hosp-name').value.trim();
     const addr  = document.getElementById('hosp-addr').value.trim();
     const depts = document.getElementById('hosp-depts').value.split(',').map(d=>d.trim()).filter(Boolean);
+    const lat = document.getElementById('hospitalLat').value;
+    const lon = document.getElementById('hospitalLon').value;
+    const fullAddress = document.getElementById('hospitalAddress').value;
     hideA('h-err'); hideA('h-ok');
     if (!name || !addr) { showA('h-err','Name and address are required'); return; }
     btn.textContent = 'Creating...'; btn.disabled = true;
     try {
-      const res  = await fetch(`${API}/hospitals`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, address:addr, departments:depts})});
+      const payload = {name, address:addr, departments:depts, location: {latitude:parseFloat(lat)||0, longitude:parseFloat(lon)||0}, fullAddress};
+      const res  = await fetch(`${API}/hospitals`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
       const data = await res.json();
       if (!res.ok) { showA('h-err', data.message); return; }
       showA('h-ok', '✅ Hospital created!');
-      ['hosp-name','hosp-addr','hosp-depts'].forEach(id => document.getElementById(id).value = '');
+      ['hosp-name','hosp-addr','hosp-depts','hospitalSearch','hospitalLat','hospitalLon','hospitalAddress'].forEach(id => { if(document.getElementById(id)) document.getElementById(id).value = ''; });
+      if(document.getElementById('selectedLocationText')) document.getElementById('selectedLocationText').innerText = '';
       toast('Hospital registered!');
       loadOverview();
       setTimeout(() => closeModal('modal-add-hospital'), 1200);
@@ -839,13 +921,32 @@
     tbody.innerHTML = '';
     if (!queue.length) { wrap.style.display='none'; empty.style.display='block'; empty.innerHTML='<div class="e-ico">🪑</div><p>No patients waiting</p>'; return; }
     wrap.style.display='block'; empty.style.display='none';
+
+    // Inject animation styles if not present
+    if (!document.getElementById('emergency-styles')) {
+      const style = document.createElement('style');
+      style.id = 'emergency-styles';
+      style.innerHTML = `
+        @keyframes sosPulse { 0%, 100% { opacity: 1; } 50% { opacity: .7; background-color: #fee2e2; } }
+        @keyframes sosBounce { 0%, 100% { transform: translateY(-10%); animation-timing-function: cubic-bezier(0.8,0,1,1); } 50% { transform: none; animation-timing-function: cubic-bezier(0,0,0.2,1); } }
+      `;
+      document.head.appendChild(style);
+    }
+
     queue.forEach(item => {
-      tbody.innerHTML += `<tr>
+      const isEmergency = item.type === 'emergency' || item.isEmergency;
+      const rowStyle = isEmergency ? 'background-color: #fef2f2; border-left: 4px solid #dc2626; animation: sosPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;' : '';
+      const nameText = isEmergency ? `🚨 ${item.patientName}` : item.patientName;
+      const statusBadge = isEmergency 
+        ? '<span style="background-color: #dc2626; color: white; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: bold; display: inline-block; animation: sosBounce 1s infinite;">EXPECTED IMMINENTLY</span>'
+        : '<span style="color:var(--muted); font-size: 13px;">Waiting</span>';
+
+      tbody.innerHTML += `<tr style="${rowStyle}">
         <td style="color:var(--muted);">${item.position}</td>
         <td><strong>#${item.tokenNumber}</strong></td>
-        <td>${item.patientName}</td>
-        <td><span class="badge badge-${item.type==='emergency'?'em':'no'}">${item.type}</span></td>
-        <td style="color:var(--muted);">${item.estimatedWaitTime}m</td>
+        <td style="font-weight: ${isEmergency ? 'bold' : 'normal'}; color: ${isEmergency ? '#dc2626' : 'var(--ink)'};">${nameText}</td>
+        <td style="font-weight: ${isEmergency ? 'bold' : 'normal'}; color: ${isEmergency ? '#dc2626' : 'var(--ink)'};">${item.department || '-'}</td>
+        <td>${statusBadge}</td>
       </tr>`;
     });
   }
