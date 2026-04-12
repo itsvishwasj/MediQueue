@@ -49,5 +49,9 @@
 	<string>This app uses speech recognition to convert your voice input into text for symptom description in the health assessment feature.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app needs access to your microphone to record your voice for symptom description.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs access to your location to find the nearest hospitals and estimate travel times.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>This app needs access to your location to find the nearest hospitals and estimate travel times.</string>
 </dict>
 </plist>

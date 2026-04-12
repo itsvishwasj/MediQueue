@@ -32,6 +32,15 @@ class _HospitalCardState extends State<HospitalCard> {
     _calculateSmartTravel();
   }
 
+  @override
+  void didUpdateWidget(covariant HospitalCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Recalculate ETA and alerts if the parent feeds us a newly fetched queue wait value!
+    if (oldWidget.currentQueueWait != widget.currentQueueWait) {
+      _calculateSmartTravel();
+    }
+  }
+
   Future<void> _calculateSmartTravel() async {
     if (widget.hospitalLat == 0.0 && widget.hospitalLon == 0.0) {
       if (mounted) {
@@ -63,7 +72,9 @@ class _HospitalCardState extends State<HospitalCard> {
       int bufferTime = widget.currentQueueWait - travelMins;
       String alertMsg;
       
-      if (bufferTime <= 5) {
+      if (widget.currentQueueWait <= 0) {
+        alertMsg = "Select a doctor to calculate when to leave";
+      } else if (bufferTime <= 5) {
         alertMsg = "🚨 Leave NOW to reach on time!";
       } else {
         alertMsg = "✅ Leave in $bufferTime mins";
@@ -114,8 +125,8 @@ class _HospitalCardState extends State<HospitalCard> {
                 children: [
                    const Icon(Icons.access_time_rounded, size: 16, color: Colors.orange),
                    const SizedBox(width: 6),
-                   Text(
-                    "Wait Time: ${widget.currentQueueWait} mins", 
+                    Text(
+                    widget.currentQueueWait > 0 ? "Wait Time: ${widget.currentQueueWait} mins" : "Wait Time: Calculating...", 
                     style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w600, fontSize: 13)
                   ),
                 ],

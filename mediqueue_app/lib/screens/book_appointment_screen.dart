@@ -406,9 +406,9 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
   }
 
   void _sortHospitals() {
-    if (_userPosition == null || _hospitalList.isEmpty) return;
+    if (_userPosition == null || _allHospitalList.isEmpty) return;
     
-    for (var h in _hospitalList) {
+    for (var h in _allHospitalList) {
       if (h.latitude != null && h.longitude != null) {
         h.distanceInKm = Geolocator.distanceBetween(
           _userPosition!.latitude, 
@@ -420,12 +420,21 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
     }
     
     setState(() {
-      _hospitalList.sort((a, b) {
+      _allHospitalList.sort((a, b) {
         if (a.distanceInKm == null && b.distanceInKm == null) return 0;
         if (a.distanceInKm == null) return 1;
         if (b.distanceInKm == null) return -1;
         return a.distanceInKm!.compareTo(b.distanceInKm!);
       });
+      // also ensure _filteredHospitalList is sorted if it has items
+      if (_filteredHospitalList.isNotEmpty) {
+        _filteredHospitalList.sort((a, b) {
+          if (a.distanceInKm == null && b.distanceInKm == null) return 0;
+          if (a.distanceInKm == null) return 1;
+          if (b.distanceInKm == null) return -1;
+          return a.distanceInKm!.compareTo(b.distanceInKm!);
+        });
+      }
     });
   }
 
@@ -516,22 +525,13 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
     }
   }
 
-  void _filterHospitalsByDepartment(String dept) async {
-    final filteredHospitals = <HospitalModel>[];
+  void _filterHospitalsByDepartment(String dept) {
     final normalizedDept = dept.toLowerCase().trim();
     
-    for (final hospital in _allHospitalList) {
-      try {
-        final depts = await HospitalService.getDepartments(hospital.id);
-        // Case-insensitive department matching
-        final hasMatchingDept = depts.any((d) => d.toLowerCase().trim() == normalizedDept);
-        if (hasMatchingDept) {
-          filteredHospitals.add(hospital);
-        }
-      } catch (e) {
-        debugPrint("Error checking departments for ${hospital.name}: $e");
-      }
-    }
+    final filteredHospitals = _allHospitalList.where((hospital) {
+      return hospital.departments.any((d) => d.toLowerCase().trim() == normalizedDept);
+    }).toList();
+    
     debugPrint('Filtered hospitals for $dept: ${filteredHospitals.length} found');
     setState(() => _filteredHospitalList = filteredHospitals);
   }
@@ -621,20 +621,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
                         }
                       },
                     ),
-                    if (hospital != null) ...[
-                      const SizedBox(height: 12),
-                      Builder(builder: (ctx) {
-                        final h = _allHospitalList.firstWhere((e) => e.name == hospital);
-                        return HospitalCard(
-                          hospitalName: h.name,
-                          hospitalLat: h.hospitalLat,
-                          hospitalLon: h.hospitalLon,
-                          currentQueueWait: 30, // Default estimated wait for hospital
-                          onTap: () {},
-                        );
-                      }),
-                    ],
-                    const SizedBox(height: 18),
+                    // Hospital card removed to be placed at the bottom
                     _label('Select Department'),
                     const SizedBox(height: 8),
                     _buildDropdown(
@@ -694,20 +681,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
                         }
                       },
                     ),
-                    if (hospital != null) ...[
-                      const SizedBox(height: 12),
-                      Builder(builder: (ctx) {
-                        final h = _allHospitalList.firstWhere((e) => e.name == hospital);
-                        return HospitalCard(
-                          hospitalName: h.name,
-                          hospitalLat: h.hospitalLat,
-                          hospitalLon: h.hospitalLon,
-                          currentQueueWait: 30, // Default estimated wait for hospital
-                          onTap: () {},
-                        );
-                      }),
-                    ],
-                    const SizedBox(height: 18),
+                    // Hospital card moved to bottom
                   ],
 
                   _label('Select Doctor'),
@@ -731,6 +705,19 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen>
                       opacity: _fadeAnim,
                       child: _isScheduled ? _buildScheduleSection() : _buildWalkInView(),
                     ),
+                    if (hospital != null) ...[
+                      const SizedBox(height: 24),
+                      Builder(builder: (ctx) {
+                        final h = _allHospitalList.firstWhere((e) => e.name == hospital);
+                        return HospitalCard(
+                          hospitalName: h.name,
+                          hospitalLat: h.hospitalLat,
+                          hospitalLon: h.hospitalLon,
+                          currentQueueWait: estimatedTime,
+                          onTap: () {},
+                        );
+                      }),
+                    ],
                   ] else ...[
                     const SizedBox(height: 24),
                     _buildPlaceholder(),

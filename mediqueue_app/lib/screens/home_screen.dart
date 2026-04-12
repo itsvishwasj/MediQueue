@@ -425,12 +425,6 @@ Future<void> _runTriage(String text) async {
     return Scaffold(
       backgroundColor: _bg,
       resizeToAvoidBottomInset: false,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _triggerEmergencySOS(context),
-        backgroundColor: Colors.red[800],
-        icon: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 30),
-        label: const Text("EMERGENCY SOS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnim,
