@@ -10,7 +10,7 @@
 * **Live Queue Monitoring:** Real-time, socket-driven visibility into current wait times and queue positions.
 * **Voice-Enabled Input:** Integrated Speech-to-Text for a hands-free, accessible symptom description experience.
 
-![Dashboard Screenshot](https://github.com/user-attachments/assets/2ece16d1-0115-46f6-8313-4126e6c7814e)
+<img src="[https://github.com/user-attachments/assets/your-long-image-id-here](https://github.com/user-attachments/assets/2ece16d1-0115-46f6-8313-4126e6c7814e)" width="600" />
 
 ---
 
