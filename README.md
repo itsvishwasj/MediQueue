@@ -1,4 +1,4 @@
-# MediQueue: AI-Powered Symptom Triage & Smart Travel Logistics (Hackathon Project)
+# MediQueue: AI-Powered Symptom Triage & Live Queue Management & Appointment Booking System (Hackathon Project)
 
 **MediQueue** is a full-stack healthcare ecosystem designed to eliminate hospital overcrowding and streamline the patient experience. By leveraging **Google Gemini AI** for intelligent symptom triage and integrating an **Open-Source Smart Travel Engine**, MediQueue ensures patients get to the right specialist exactly when it is their turn.
 
@@ -22,7 +22,6 @@ The project is deployed across a three-tier architecture:
 MediQueue/
 ├── medi_queue_app/       # Flutter Mobile Application (iOS/Android)
 ├── mediqueue-backend/    # Node.js & Express API
-└── mediqueue-admin/      # Vanilla JS/React Admin Dashboard
 ```
 
 ---
