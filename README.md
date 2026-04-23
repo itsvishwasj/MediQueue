@@ -2,7 +2,7 @@
 
 **MediQueue** is a full-stack healthcare ecosystem designed to eliminate hospital overcrowding and streamline the patient experience. By leveraging **Google Gemini AI** for intelligent symptom triage and integrating an **Open-Source Smart Travel Engine**, MediQueue ensures patients get to the right specialist exactly when it is their turn.
 
-## 🚀 Key Features 
+## 🚀 Key Features  
 
 * **AI-Driven Triage:** An interactive symptom checker powered by Gemini AI that asks follow-up questions to accurately recommend the correct hospital department.
 * **📍 Smart Travel Engine (Virtual Waiting Room):** Integrates the **OSRM (Open Source Routing Machine) API** to calculate real-time driving ETAs from the patient's live GPS location, alerting them exactly when to leave for the hospital.
